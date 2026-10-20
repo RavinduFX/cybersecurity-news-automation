@@ -82,20 +82,27 @@ def categorize_story(story):
     return "📰 Other"
 
 
+
 def prioritize_story(story):
     text = story["title"].lower()
 
     high_priority = [
-        "zero-day", "zero day", "actively exploited",
-        "remote code execution", "rce",
-        "unauthenticated exploit", "exploited in attacks",
-        "ransomware attack"
+        "zero-day", "zero day",
+        "actively exploited", "exploited in attacks",
+        "remote code execution", "unauthenticated rce",
+        "ransomware", "bypass mfa", "mfa bypass",
+        "actively targeted", "critical vulnerability",
+        "mass exploitation", "systems compromised",
+        "spyware infection", "company websites"
     ]
 
     medium_priority = [
         "vulnerability", "security flaw", "data breach",
         "data leak", "phishing", "malware",
-        "exploit", "credential theft"
+        "exploit", "credential theft", "spyware",
+        "cyberattack", "cyber attack", "hacked",
+        "stolen data", "account takeover",
+        "security patch", "privilege escalation"
     ]
 
     if any(keyword in text for keyword in high_priority):
@@ -105,6 +112,7 @@ def prioritize_story(story):
         return "🟡 MEDIUM"
 
     return "🟢 LOW"
+
 
 def build_digest(stories):
     now = datetime.now(timezone.utc)
