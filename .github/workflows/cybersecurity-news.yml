@@ -22,7 +22,5 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Confirm automation is running
-        run: |
-          echo "Cybersecurity news automation is running!"
-          echo "Scheduled time: 9:00 AM Sri Lanka time."
+      - name: Fetch cybersecurity news
+        run: python news_bot.py
