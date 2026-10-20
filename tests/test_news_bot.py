@@ -1,6 +1,6 @@
 import unittest
 
-from news_bot import categorize_story, prioritize_story
+from news_bot import categorize_story, prioritize_story, is_soc_relevant
 
 
 class TestNewsBot(unittest.TestCase):
@@ -68,7 +68,14 @@ class TestNewsBot(unittest.TestCase):
             categorize_story(story),
             "🔐 Certificate & Trust Infrastructure"
         )
+        
+    def test_soc_relevant_story(self):
+        story = {"title": "Critical vulnerability actively exploited in attacks"}
+        self.assertTrue(is_soc_relevant(story))
 
+    def test_general_technology_story_not_soc_relevant(self):
+        story = {"title": "New AI tool improves legacy code migration"}
+        self.assertFalse(is_soc_relevant(story))
 
 if __name__ == "__main__":
     unittest.main()
