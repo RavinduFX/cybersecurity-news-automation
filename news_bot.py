@@ -1,8 +1,6 @@
 
 import unittest
 
-from news_bot import categorize_story, prioritize_story
-
 
 class TestNewsBot(unittest.TestCase):
 
