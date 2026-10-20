@@ -1,7 +1,10 @@
 
+import os
 import re
 import html
+import json
 import urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -63,6 +66,73 @@ def fetch_feed(source, url):
         return []
 
 
+def build_digest(stories):
+    now = datetime.now(timezone.utc)
+    lines = [
+        ":newspaper: *Daily Cybersecurity News*",
+        f"_Generated {now.strftime('%Y-%m-%d %H:%M UTC')}_",
+        "",
+    ]
+
+    if not stories:
+        lines.append("No stories could be retrieved today.")
+        return "\n".join(lines)
+
+    for number, story in enumerate(stories, start=1):
+        title = story["title"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        source = story["source"]
+        link = story["link"]
+
+        lines.append(f"*{number}. <{link}|{title}>*")
+        lines.append(f"_{source}_")
+        lines.append("")
+
+    lines.append(f"_Total stories: {len(stories)}_")
+    return "\n".join(lines)
+
+
+def post_to_slack(message):
+    token = os.environ.get("SLACK_BOT_TOKEN")
+    channel = os.environ.get("SLACK_CHANNEL_ID")
+
+    if not token or not channel:
+        raise RuntimeError(
+            "Missing SLACK_BOT_TOKEN or SLACK_CHANNEL_ID environment secret."
+        )
+
+    payload = json.dumps({
+        "channel": channel,
+        "text": message,
+        "unfurl_links": False,
+    }).encode("utf-8")
+
+    request = urllib.request.Request(
+        "https://slack.com/api/chat.postMessage",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json; charset=utf-8",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(
+            request, timeout=TIMEOUT_SECONDS
+        ) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(
+            f"Slack API returned HTTP {error.code}."
+        ) from error
+
+    if not result.get("ok"):
+        error_code = result.get("error", "unknown_error")
+        raise RuntimeError(f"Slack rejected the message: {error_code}")
+
+    print("Successfully posted the cybersecurity digest to Slack.")
+
+
 def main():
     print("CYBERSECURITY DAILY NEWS")
     print(f"Generated: {datetime.now(timezone.utc).isoformat()}")
@@ -72,7 +142,6 @@ def main():
     for source, url in FEEDS:
         all_stories.extend(fetch_feed(source, url))
 
-    # Keep recent stories first when publication dates are available.
     all_stories.sort(
         key=lambda story: story["published"] or datetime.min.replace(
             tzinfo=timezone.utc
@@ -91,19 +160,20 @@ def main():
 
     selected = unique_stories[:MAX_STORIES]
 
-    if not selected:
-        print("\nNo stories could be retrieved. Check the feed warnings above.")
-        return
-
     for number, story in enumerate(selected, start=1):
         published = story["published"]
-        date_text = published.strftime("%Y-%m-%d %H:%M UTC") if published else "Date unavailable"
-
-        print(f"\n{number}. {story['title']}")
+        date_text = (
+            published.strftime("%Y-%m-%d %H:%M UTC")
+            if published else "Date unavailable"
+        )
+        print(f"{number}. {story['title']}")
         print(f"   Source: {story['source']} | Published: {date_text}")
         print(f"   Link: {story['link']}")
 
-    print(f"\nTotal stories: {len(selected)}")
+    digest = build_digest(selected)
+    post_to_slack(digest)
+
+    print(f"Total stories: {len(selected)}")
 
 
 if __name__ == "__main__":
