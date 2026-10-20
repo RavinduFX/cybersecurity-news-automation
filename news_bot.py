@@ -73,29 +73,41 @@ def categorize_story(story):
         "🚨 Vulnerability": [
             "cve-", "zero-day", "zero day", "vulnerability",
             "security flaw", "patch", "exploit", "mfa bypass",
-            "bypass mfa", "remote code execution"
+            "bypass mfa", "remote code execution", "rce",
+            "privilege escalation"
         ],
         "🦠 Malware & Ransomware": [
             "ransomware", "malware", "trojan", "rootkit",
-            "botnet"
+            "botnet", "wiper malware", "backdoor"
         ],
         "🕵️ Spyware & Surveillance": [
-            "spyware", "pegasus", "surveillanceware"
+            "spyware", "pegasus", "surveillanceware",
+            "stalkerware", "mercenary spyware"
         ],
         "🔓 Data Breach": [
             "data breach", "data leak", "leaked data",
             "stolen data", "exposed database", "exposed records",
-            "credential theft"
+            "credential theft", "credentials stolen",
+            "information theft"
+        ],
+        "🔐 Certificate & Trust Infrastructure": [
+            "certificate authority", "ca keys", "certificate keys",
+            "signing certificate", "code-signing certificate",
+            "compromised certificate", "fraudulent certificate",
+            "certificate revocation", "root certificate",
+            "trust infrastructure"
         ],
         "🎯 Threat Intelligence": [
             "apt", "threat actor", "phishing campaign",
-            "indicators of compromise", "ioc", "cyber espionage"
+            "indicators of compromise", "ioc", "cyber espionage",
+            "threat campaign", "nation-state hackers"
         ],
         "🛡️ Cyberattacks & Intrusions": [
             "cyberattack", "cyber attack", "hackers use",
             "breach company websites", "unauthorized access",
             "websites compromised", "systems compromised",
-            "intrusion", "hacked"
+            "intrusion", "hacked", "keys compromised",
+            "account takeover"
         ],
     }
 
