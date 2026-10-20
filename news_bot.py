@@ -1,8 +1,12 @@
 
 import unittest
 
+from news_bot import categorize_story, prioritize_story
+
 
 class TestNewsBot(unittest.TestCase):
+
+    # Category tests
 
     def test_vulnerability_category(self):
         story = {"title": "Critical vulnerability discovered"}
@@ -14,16 +18,6 @@ class TestNewsBot(unittest.TestCase):
             categorize_story(story),
             "🦠 Malware & Ransomware"
         )
-
-    def test_high_priority(self):
-        story = {
-            "title": "Critical vulnerability actively exploited in attacks"
-        }
-        self.assertEqual(prioritize_story(story), "🔴 HIGH")
-
-    def test_low_priority(self):
-        story = {"title": "New technology trends announced"}
-        self.assertEqual(prioritize_story(story), "🟢 LOW")
 
     def test_data_breach_category(self):
         story = {"title": "Company reports major data breach"}
@@ -50,13 +44,25 @@ class TestNewsBot(unittest.TestCase):
             "🛡️ Cyberattacks & Intrusions"
         )
 
+    def test_unknown_story_category(self):
+        story = {"title": "New technology trends announced"}
+        self.assertEqual(categorize_story(story), "📰 Other")
+
+    # Priority tests
+
+    def test_high_priority(self):
+        story = {
+            "title": "Critical vulnerability actively exploited in attacks"
+        }
+        self.assertEqual(prioritize_story(story), "🔴 HIGH")
+
     def test_medium_priority(self):
         story = {"title": "New phishing campaign targets employees"}
         self.assertEqual(prioritize_story(story), "🟡 MEDIUM")
 
-    def test_unknown_story_category(self):
+    def test_low_priority(self):
         story = {"title": "New technology trends announced"}
-        self.assertEqual(categorize_story(story), "📰 Other")
+        self.assertEqual(prioritize_story(story), "🟢 LOW")
 
 
 if __name__ == "__main__":
