@@ -1,4 +1,3 @@
-
 import os
 import re
 import html
@@ -83,6 +82,30 @@ def categorize_story(story):
     return "📰 Other"
 
 
+def prioritize_story(story):
+    text = story["title"].lower()
+
+    high_priority = [
+        "zero-day", "zero day", "actively exploited",
+        "remote code execution", "rce",
+        "unauthenticated exploit", "exploited in attacks",
+        "ransomware attack"
+    ]
+
+    medium_priority = [
+        "vulnerability", "security flaw", "data breach",
+        "data leak", "phishing", "malware",
+        "exploit", "credential theft"
+    ]
+
+    if any(keyword in text for keyword in high_priority):
+        return "🔴 HIGH"
+
+    if any(keyword in text for keyword in medium_priority):
+        return "🟡 MEDIUM"
+
+    return "🟢 LOW"
+
 def build_digest(stories):
     now = datetime.now(timezone.utc)
     lines = [
@@ -101,8 +124,11 @@ def build_digest(stories):
         link = story["link"]
 
         category = categorize_story(story)
+        priority = prioritize_story(story)
+
         lines.append(f"*{number}. <{link}|{title}>*")
-        lines.append(f"{category} · _{source}_")
+        lines.append(f"{priority} · {category} · _{source}_")
+        
         lines.append("")
 
     lines.append(f"_Total stories: {len(stories)}_")
