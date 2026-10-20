@@ -1,197 +1,186 @@
-# Cybersecurity News Automation Bot — Architecture
+# Project Architecture
 
-## 1. Purpose
+## 1. Overview
 
-The Cybersecurity News Automation Bot is a Python-based automation project that collects cybersecurity news, classifies stories using keyword-based rules, assigns preliminary priority labels, and delivers a formatted digest to a private Slack channel.
+The Cybersecurity News Automation project is a Python-based automation system that collects cybersecurity news from RSS feeds, prioritizes SOC-relevant articles, categorizes stories, assigns priority labels, and publishes a daily digest to Slack.
 
-GitHub Actions provides the workflow automation and scheduled execution.
+GitHub Actions handles scheduled execution and automated testing.
 
-## 2. High-Level Architecture
+## 2. Architecture
 
 ```text
-              GitHub Actions
-          Scheduled or Manual Run
-                     |
-                     v
-              Python Bot
-              news_bot.py
-                     |
-                     v
-          News Collection Layer
-                     |
-                     v
-          Story Processing Layer
-             /             \
-            v               v
-     Categorization      Prioritization
-   categorize_story()  prioritize_story()
-            \               /
-             v             v
-              Digest Builder
-              build_digest()
-                     |
-                     v
-              Slack Delivery
-                     |
-                     v
-           Private Slack Channel
+GitHub Actions
+      |
+      v
+Python Environment Setup
+      |
+      v
+Install Dependencies
+      |
+      v
+Run Unit Tests
+      |
+      v
+Execute news_bot.py
+      |
+      v
+Fetch RSS Feeds
+      |
+      v
+Parse and Normalize Articles
+      |
+      v
+Sort by Publication Date
+      |
+      v
+Remove Duplicate Links
+      |
+      v
+Select Up to 10 Articles
+      |
+      v
+Prioritize SOC-Relevant Stories
+      |
+      v
+Categorize and Assign Priorities
+      |
+      v
+Build Slack Digest
+      |
+      v
+Post to Slack
 ```
 
-This diagram represents the logical workflow. The exact collection and delivery implementations are defined in the Python script and GitHub Actions workflow.
+## 3. News Sources
 
-## 3. Main Components
-
-### 3.1 GitHub Repository
-
-The repository stores the Python source code, workflow configuration, and project documentation.
-
-Primary files include:
-
-- `news_bot.py` — the main Python bot.
-- `.github/workflows/` — GitHub Actions workflow configuration.
-- `README.md` — project overview, setup information, and status.
-- `docs/PROJECT_ARCHITECTURE.md` — this architecture document.
-
-### 3.2 GitHub Actions
-
-GitHub Actions runs the bot automatically according to the configured schedule. It can also run manually for testing and troubleshooting.
-
-The workflow is responsible for executing the configured automation steps and making required secrets available to the process.
-
-### 3.3 News Collection
-
-The collection component retrieves cybersecurity news from the configured sources:
+The bot retrieves news from:
 
 - The Hacker News
 - BleepingComputer
 - Krebs on Security
 
-The retrieval methods, feed URLs, error handling, and filtering behavior are defined in the project source code.
+Each feed is fetched using Python's `urllib.request` module and parsed using `xml.etree.ElementTree`.
 
-### 3.4 Story Categorization
+If a feed cannot be retrieved or parsed, the bot logs a warning and continues with the remaining sources.
 
-The `categorize_story()` function examines each headline and matches it against configured keywords.
+## 4. Article Processing
 
-Current categories include:
+Each article contains the following fields:
 
-- Vulnerability
-- Malware & Ransomware
-- Spyware & Surveillance
-- Data Breach
-- Threat Intelligence
-- Cyberattacks & Intrusions
-- Other
+- `source`: Name of the news source.
+- `title`: Article headline.
+- `link`: Article URL.
+- `published`: Publication date, when available.
 
-The function returns the first matching category according to the order of the configured rules. Headlines that do not match a category are assigned to Other.
+Articles are sorted by publication date, newest first. Articles without a valid publication date are placed after articles with valid dates.
 
-### 3.5 Priority Classification
+Duplicate URLs are removed within the current execution. The bot then selects up to 10 unique articles.
 
-The `prioritize_story()` function evaluates headline keywords and assigns one of three labels:
+## 5. SOC Relevance
 
-- **HIGH** — configured indicators associated with potentially urgent security developments.
-- **MEDIUM** — configured indicators associated with relevant security issues.
-- **LOW** — no matching HIGH or MEDIUM indicators.
+The `is_soc_relevant(story)` function checks article titles against a collection of cybersecurity keywords.
 
-This is a preliminary, keyword-based classification. It does not independently verify technical severity or business impact.
+Examples include:
 
-### 3.6 Digest Generation
+- Vulnerabilities and CVEs
+- Exploits and remote code execution
+- Malware and ransomware
+- Phishing and spyware
+- Data breaches and credential theft
+- Threat actors and intrusions
+- Certificate authority compromise
+- Security incidents and advisories
 
-The `build_digest()` function formats the collected stories into a Slack-friendly message.
+SOC-relevant stories are placed before other stories in the digest. The remaining stories are retained when the selected list contains them.
 
-The digest includes:
+## 6. Categorization
 
-- A daily cybersecurity news heading.
-- A generation timestamp in UTC.
-- Numbered article titles linked to their original sources.
-- Priority and category labels.
-- News source attribution.
-- A total story count.
+The `categorize_story(story)` function assigns one category based on matching title keywords.
 
-If no stories are available, the function produces a fallback message.
+Supported categories:
 
-### 3.7 Slack Delivery
+1. Vulnerability
+2. Malware & Ransomware
+3. Spyware & Surveillance
+4. Data Breach
+5. Certificate & Trust Infrastructure
+6. Threat Intelligence
+7. Cyberattacks & Intrusions
+8. Other
 
-The delivery component sends the formatted digest to the configured private Slack channel.
+The function returns the first matching category according to the configured category order.
 
-Credentials should be stored in GitHub Actions Secrets rather than embedded in the source code.
+## 7. Priority Assignment
 
-## 4. Execution Flow
+The `prioritize_story(story)` function assigns one of three priority levels:
 
-1. GitHub Actions starts the workflow on its configured schedule or through a manual trigger.
-2. The workflow prepares the runtime environment and executes the Python bot.
-3. The bot retrieves news from its configured sources.
-4. Retrieved stories are processed by the categorization and priority functions.
-5. The digest builder formats the results.
-6. The delivery component sends the digest to Slack.
-7. The workflow reports its execution status in GitHub Actions.
+- HIGH
+- MEDIUM
+- LOW
 
-The precise order of initialization, collection, filtering, and delivery depends on the implementation in `news_bot.py`.
+HIGH keywords are evaluated first, followed by MEDIUM keywords. If neither group matches, the story receives LOW priority.
 
-## 5. Data Flow
+Priority assignment is based on headline keyword matching rather than a full technical risk assessment.
 
-Each collected story is processed as structured data. The current categorization and prioritization functions expect a story to provide at least a title.
+## 8. Slack Integration
 
-The digest builder also uses the story's source and article link.
+The `post_to_slack(message)` function sends the formatted digest through Slack's `chat.postMessage` API.
 
-Conceptually, a story contains:
+It reads two environment variables:
 
-| Field | Purpose |
-|---|---|
-| `title` | Headline used for classification and display |
-| `source` | Name of the publishing source |
-| `link` | URL of the original article |
+- `SLACK_BOT_TOKEN`
+- `SLACK_CHANNEL_ID`
 
-Additional fields may exist depending on the collection implementation.
+The function checks the API response and raises an error if Slack rejects the message.
 
-## 6. Security Design
+Credentials must be stored as GitHub Actions repository secrets and must never be committed to source control.
 
-The project follows these security principles:
+## 9. GitHub Actions
 
-- Store Slack credentials in GitHub Actions Secrets.
-- Do not commit tokens, passwords, or webhook URLs.
-- Restrict repository and workflow permissions to what is necessary.
-- Validate and review external content before relying on it.
-- Treat automated labels as triage assistance rather than definitive security assessments.
-- Consult original articles and official vendor advisories before making remediation decisions.
+The workflow is defined in:
 
-## 7. Reliability and Limitations
+`.github/workflows/cybersecurity-news.yml`
 
-The current system uses headline-based keyword matching. As a result:
+It performs these tasks:
 
-- Relevant stories may be missed if headlines use unexpected wording.
-- A story may be assigned to the first matching category even if another category is also relevant.
-- Priority labels may not reflect actual exploitability or organizational risk.
-- Source availability and retrieval failures may affect the number of collected stories.
-- A successful workflow run does not necessarily prove that every possible story was retrieved.
+1. Checks out the repository.
+2. Sets up Python 3.12.
+3. Installs dependencies when `requirements.txt` exists.
+4. Runs unit tests.
+5. Executes `news_bot.py` with the required Slack secrets.
 
-These limitations can be addressed incrementally with testing, better filtering, improved error handling, and enrichment from trusted security data sources.
+The cron schedule is `30 3 * * *`, corresponding to 09:00 Sri Lanka Standard Time (UTC+5:30).
 
-## 8. Testing and Validation
+Manual execution is also supported through `workflow_dispatch`.
 
-The project has been manually tested through GitHub Actions. A test run successfully delivered a 10-story cybersecurity digest to Slack, including the updated Spyware & Surveillance and Cyberattacks & Intrusions categories.
+## 10. Testing
 
-Recommended future tests include:
+Automated tests are maintained in `tests/test_news_bot.py`.
 
-- Unit tests for categorization and priority classification.
-- Tests for empty story lists and malformed story data.
-- Validation of digest formatting and article links.
-- Tests for source retrieval failures.
-- Verification of Slack delivery failure handling.
+The current test suite covers categorization, priority assignment, certificate authority compromise, SOC relevance, and general technology stories.
 
-## 9. Future Architecture Improvements
+Tests run through Python's built-in `unittest` framework.
 
-Potential improvements include:
+Run them locally with:
 
-- Article summarization using an AI model.
-- CVE and CVSS enrichment using trusted vulnerability sources.
-- MITRE ATT&CK technique mapping.
-- Duplicate detection across news sources.
-- Structured logging and error notifications.
-- Automated tests in GitHub Actions.
-- Weekly reports and historical trend analysis.
+```bash
+python -m unittest discover -s tests -v
+```
 
-## 10. Summary
+## 11. Current Limitations
 
-The project demonstrates an automated cybersecurity news pipeline using Python, GitHub Actions, keyword-based classification, and Slack delivery.
+- Duplicate filtering does not persist between executions.
+- Keyword-based classification may misclassify ambiguous headlines.
+- Feed availability and publication-date formats may vary.
+- The bot processes article headlines rather than performing full article content analysis.
+- Slack message delivery depends on valid credentials, permissions, and API availability.
 
-Its current purpose is to make security news easier to monitor and triage. Future improvements can expand it into a more comprehensive threat-intelligence workflow while retaining human validation and secure credential handling.
+## 12. Future Improvements
+
+Potential future enhancements include:
+
+- Persistent duplicate filtering across daily runs.
+- More precise priority scoring.
+- Better handling of article publication dates and URL normalization.
+- Additional trusted cybersecurity sources.
+- More comprehensive automated tests.
