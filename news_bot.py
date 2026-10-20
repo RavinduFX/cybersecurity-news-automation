@@ -152,6 +152,29 @@ def prioritize_story(story):
     return "🟢 LOW"
 
 
+def is_soc_relevant(story):
+    text = story["title"].lower()
+
+    soc_keywords = [
+        "vulnerability", "cve-", "zero-day", "zero day",
+        "exploit", "actively exploited", "remote code execution",
+        "ransomware", "malware", "trojan", "botnet",
+        "spyware", "pegasus", "phishing",
+        "data breach", "data leak", "stolen data",
+        "credential theft", "account takeover",
+        "cyberattack", "cyber attack", "hacked",
+        "hackers", "compromised", "unauthorized access",
+        "intrusion", "threat actor", "apt",
+        "cyber espionage", "indicators of compromise",
+        "certificate authority", "ca keys",
+        "security flaw", "privilege escalation",
+        "security patch", "security advisory",
+        "incident response", "security incident"
+    ]
+
+    return any(keyword in text for keyword in soc_keywords)
+
+
 def build_digest(stories):
     now = datetime.now(timezone.utc)
     lines = [
