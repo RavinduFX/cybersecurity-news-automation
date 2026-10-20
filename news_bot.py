@@ -66,6 +66,23 @@ def fetch_feed(source, url):
         return []
 
 
+def categorize_story(story):
+    text = story["title"].lower()
+
+    categories = {
+        "🚨 Vulnerability": ["cve-", "zero-day", "zero day", "vulnerability", "security flaw", "patch", "exploit"],
+        "🦠 Malware & Ransomware": ["ransomware", "malware", "trojan", "rootkit", "botnet", "spyware"],
+        "🔓 Data Breach": ["data breach", "data leak", "leaked data", "stolen data", "exposed database", "exposed records"],
+        "🎯 Threat Intelligence": ["apt", "threat actor", "phishing campaign", "indicators of compromise", "ioc", "cyber espionage"],
+    }
+
+    for category, keywords in categories.items():
+        if any(keyword in text for keyword in keywords):
+            return category
+
+    return "📰 Other"
+
+
 def build_digest(stories):
     now = datetime.now(timezone.utc)
     lines = [
@@ -83,8 +100,9 @@ def build_digest(stories):
         source = story["source"]
         link = story["link"]
 
+        category = categorize_story(story)
         lines.append(f"*{number}. <{link}|{title}>*")
-        lines.append(f"_{source}_")
+        lines.append(f"{category} · _{source}_")
         lines.append("")
 
     lines.append(f"_Total stories: {len(stories)}_")
