@@ -2,58 +2,113 @@
 
 ## Project: Cybersecurity News Automation
 
-This document tracks the development milestones, testing, and planned improvements for the project.
+A Python automation project that collects cybersecurity news, identifies SOC-relevant headlines, categorizes stories, assigns priority labels, and posts a daily digest to Slack.
 
-## Milestones Completed
+## Completed Work
 
-### 1. Automated News Collection
-- Configured news collection from The Hacker News, BleepingComputer, and Krebs on Security.
-- Collected cybersecurity story titles, links, and source information.
+### 1. RSS Feed Integration
 
-### 2. Story Categorization
-- Implemented keyword-based categories for vulnerabilities, malware, ransomware, spyware, data breaches, threat intelligence, and cyberattacks.
-- Added an `Other` category for stories that do not match the configured keywords.
+- Integrated The Hacker News RSS feed.
+- Integrated BleepingComputer RSS feed.
+- Integrated Krebs on Security RSS feed.
+- Added error handling so one unavailable feed does not prevent processing other sources.
 
-### 3. Priority Classification
-- Added HIGH, MEDIUM, and LOW priority labels using title-based keyword matching.
-- Documented that priority labels are preliminary signals and may require manual verification.
+### 2. Article Processing
 
-### 4. Slack Integration
-- Configured the bot to send a formatted cybersecurity digest to a private Slack channel.
-- Included clickable story links, source names, categories, and priority labels.
+- Extracted article titles, links, source names, and publication dates.
+- Added publication-date sorting.
+- Added duplicate URL filtering within each execution.
+- Limited each digest to a maximum of 10 articles.
 
-### 5. GitHub Actions Automation
-- Configured a GitHub Actions workflow to run the bot automatically.
-- Successfully tested a manual workflow run.
+### 3. Cybersecurity Categorization
 
-### 6. Documentation
-- Created `README.md` to explain the project, setup, features, and limitations.
-- Created `docs/PROJECT_ARCHITECTURE.md` to document the system components and data flow.
+Implemented keyword-based categorization for:
 
-## Testing and Validation
+- Vulnerability
+- Malware & Ransomware
+- Spyware & Surveillance
+- Data Breach
+- Certificate & Trust Infrastructure
+- Threat Intelligence
+- Cyberattacks & Intrusions
+- Other
 
-- [x] Manual GitHub Actions run completed successfully.
-- [x] Cybersecurity news digest delivered to Slack.
-- [x] Ten stories appeared in a sample digest.
-- [x] Category and priority labels appeared in the output.
-- [x] Story titles included clickable links.
+### 4. Priority Assignment
+
+Implemented HIGH, MEDIUM, and LOW priority labels based on configurable headline keywords.
+
+High-priority terms include indicators such as zero-day exploitation, ransomware, remote code execution, and certificate compromise.
+
+### 5. SOC-Relevant Story Prioritization
+
+Added `is_soc_relevant(story)` to identify headlines associated with operational security monitoring and incident response.
+
+Updated the digest builder to place SOC-relevant stories first while retaining other selected stories.
+
+### 6. Slack Integration
+
+- Integrated the Slack Web API.
+- Added environment-variable configuration for the bot token and destination channel.
+- Added response validation and error handling.
+- Formatted stories with clickable article links, source names, categories, and priority labels.
+
+### 7. GitHub Actions Automation
+
+Created the scheduled workflow at:
+
+`.github/workflows/cybersecurity-news.yml`
+
+The workflow:
+
+- Uses Python 3.12.
+- Installs dependencies when a requirements file is available.
+- Runs automated unit tests.
+- Executes the news bot with GitHub Actions secrets.
+- Supports manual workflow execution.
+- Runs daily at 09:00 Sri Lanka Standard Time.
+
+### 8. Automated Testing
+
+Added unit tests covering:
+
+- Vulnerability categorization
+- Ransomware categorization
+- Data breach categorization
+- Spyware categorization
+- Threat intelligence categorization
+- Cyberattack categorization
+- Unknown-story categorization
+- HIGH, MEDIUM, and LOW priority assignment
+- Certificate authority compromise
+- SOC-relevant headlines
+- General technology headlines
+
+The latest reported test run passed all 13 tests.
+
+## Current Project Status
+
+The bot can fetch news from its configured RSS feeds, process and classify stories, prioritize SOC-relevant headlines, and publish the daily digest to Slack.
+
+Scheduled execution and automated testing are configured through GitHub Actions.
 
 ## Known Limitations
 
-- Categories and priority labels rely on keywords rather than full contextual analysis.
-- Some stories may be misclassified or assigned a low priority despite being important.
-- News availability and formatting depend on the configured sources.
-- The digest is intended for awareness and learning, not as a substitute for verified threat intelligence.
+- Previously posted articles can appear again on subsequent days.
+- Categorization and prioritization rely on headline keywords.
+- The bot does not perform full article analysis or independent vulnerability verification.
+- Feed failures, network issues, and Slack API errors can affect an execution.
 
-## Planned Improvements
+## Potential Next Steps
 
-- Add duplicate-story detection.
-- Improve classification accuracy and contextual analysis.
-- Include CVE identifiers and CVSS severity when available.
-- Add concise story summaries and defensive recommendations.
-- Add automated tests, error handling, and improved logging.
-- Explore MITRE ATT&CK technique mapping.
+1. Add more unit tests for digest formatting and feed parsing.
+2. Improve keyword matching and reduce false-positive priority assignments.
+3. Consider persistent duplicate filtering if repeated stories become a problem.
+4. Add more trusted cybersecurity news sources.
+5. Monitor scheduled workflow runs and Slack digest quality.
 
-## Current Status
+## Maintenance Notes
 
-The bot successfully collects cybersecurity news, classifies stories, and delivers a digest to Slack through GitHub Actions. Development will continue with a focus on reliability, classification accuracy, and useful security context.
+- Keep Slack credentials in GitHub Actions secrets.
+- Never commit tokens or credentials.
+- Review GitHub Actions logs when a scheduled run fails.
+- Run the unit tests after modifying categorization or priority logic.
