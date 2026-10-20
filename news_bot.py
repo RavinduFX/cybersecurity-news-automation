@@ -175,6 +175,7 @@ def is_soc_relevant(story):
     return any(keyword in text for keyword in soc_keywords)
 
 
+
 def build_digest(stories):
     now = datetime.now(timezone.utc)
     lines = [
@@ -187,8 +188,19 @@ def build_digest(stories):
         lines.append("No stories could be retrieved today.")
         return "\n".join(lines)
 
-    for number, story in enumerate(stories, start=1):
-        title = story["title"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # Put SOC-relevant stories first; retain all other stories afterward.
+    ordered_stories = sorted(
+        stories,
+        key=lambda story: not is_soc_relevant(story)
+    )
+
+    for number, story in enumerate(ordered_stories, start=1):
+        title = (
+            story["title"]
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
         source = story["source"]
         link = story["link"]
 
@@ -197,10 +209,9 @@ def build_digest(stories):
 
         lines.append(f"*{number}. <{link}|{title}>*")
         lines.append(f"{priority} · {category} · _{source}_")
-        
         lines.append("")
 
-    lines.append(f"_Total stories: {len(stories)}_")
+    lines.append(f"_Total stories: {len(ordered_stories)}_")
     return "\n".join(lines)
 
 
