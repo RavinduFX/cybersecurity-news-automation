@@ -65,14 +65,38 @@ def fetch_feed(source, url):
         return []
 
 
+
 def categorize_story(story):
     text = story["title"].lower()
 
     categories = {
-        "🚨 Vulnerability": ["cve-", "zero-day", "zero day", "vulnerability", "security flaw", "patch", "exploit"],
-        "🦠 Malware & Ransomware": ["ransomware", "malware", "trojan", "rootkit", "botnet", "spyware"],
-        "🔓 Data Breach": ["data breach", "data leak", "leaked data", "stolen data", "exposed database", "exposed records"],
-        "🎯 Threat Intelligence": ["apt", "threat actor", "phishing campaign", "indicators of compromise", "ioc", "cyber espionage"],
+        "🚨 Vulnerability": [
+            "cve-", "zero-day", "zero day", "vulnerability",
+            "security flaw", "patch", "exploit", "mfa bypass",
+            "bypass mfa", "remote code execution"
+        ],
+        "🦠 Malware & Ransomware": [
+            "ransomware", "malware", "trojan", "rootkit",
+            "botnet"
+        ],
+        "🕵️ Spyware & Surveillance": [
+            "spyware", "pegasus", "surveillanceware"
+        ],
+        "🔓 Data Breach": [
+            "data breach", "data leak", "leaked data",
+            "stolen data", "exposed database", "exposed records",
+            "credential theft"
+        ],
+        "🎯 Threat Intelligence": [
+            "apt", "threat actor", "phishing campaign",
+            "indicators of compromise", "ioc", "cyber espionage"
+        ],
+        "🛡️ Cyberattacks & Intrusions": [
+            "cyberattack", "cyber attack", "hackers use",
+            "breach company websites", "unauthorized access",
+            "websites compromised", "systems compromised",
+            "intrusion", "hacked"
+        ],
     }
 
     for category, keywords in categories.items():
@@ -80,8 +104,6 @@ def categorize_story(story):
             return category
 
     return "📰 Other"
-
-
 
 def prioritize_story(story):
     text = story["title"].lower()
