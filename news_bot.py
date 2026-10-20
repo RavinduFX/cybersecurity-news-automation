@@ -127,7 +127,11 @@ def prioritize_story(story):
         "ransomware", "bypass mfa", "mfa bypass",
         "actively targeted", "critical vulnerability",
         "mass exploitation", "systems compromised",
-        "spyware infection", "company websites"
+        "spyware infection", "company websites","ca keys compromised",
+        "certificate authority",
+        "signing certificate compromised",
+        "fraudulent certificate",
+        "trust infrastructure",
     ]
 
     medium_priority = [
