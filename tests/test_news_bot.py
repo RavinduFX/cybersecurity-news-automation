@@ -60,5 +60,15 @@ class TestNewsBot(unittest.TestCase):
         self.assertEqual(prioritize_story(story), "🟢 LOW")
 
 
+    def test_certificate_authority_compromise(self):
+        story = {
+            "title": "Eight eMudhra CA Keys Compromised, Triggering Emergency Fixes"
+        }
+        self.assertEqual(
+            categorize_story(story),
+            "🔐 Certificate & Trust Infrastructure"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
