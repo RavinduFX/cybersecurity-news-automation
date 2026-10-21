@@ -1,146 +1,213 @@
-# Cybersecurity News Automation
+# Cybersecurity News Automation Bot
 
-An automated Python bot that collects cybersecurity news from trusted RSS feeds, prioritizes relevant stories, categorizes them, and delivers a daily digest to Slack using GitHub Actions.
+An automated cybersecurity news bot that collects articles from trusted cybersecurity news sources, identifies relevant vulnerability information, and posts a daily digest to Slack using GitHub Actions.
 
 ## Features
 
-- **Automated daily delivery:** Runs on a scheduled GitHub Actions workflow.
-- **Multiple news sources:** Collects articles from:
-  - [The Hacker News](https://thehackernews.com/)
-  - [BleepingComputer](https://www.bleepingcomputer.com/)
-  - [Krebs on Security](https://krebsonsecurity.com/)
-- **Story categorization:** Groups articles into cybersecurity categories, including vulnerabilities, cyberattacks, malware and ransomware, data breaches, certificate and trust infrastructure, and threat intelligence.
-- **Priority scoring:** Helps surface high-priority cybersecurity stories.
-- **SOC relevance filtering:** Identifies stories that may be useful for Security Operations Center (SOC) monitoring and analysis.
-- **Slack notifications:** Sends the daily digest to a configured Slack channel.
-- **Automated quality checks:** Includes Python unit tests and Bandit security analysis in the GitHub Actions workflow.
+- Automatically collects cybersecurity news from configured RSS feeds.
+- Currently configured sources:
+  - The Hacker News
+  - BleepingComputer
+  - Krebs on Security
+- Posts a formatted news digest to a configured Slack channel.
+- Supports manual execution through GitHub Actions.
+- Runs automated unit tests.
+- Uses Bandit to scan Python code for common security issues.
+- Uses GitHub Actions to automate checks and scheduled execution.
+- Supports strict, title-only CISA Known Exploited Vulnerabilities (KEV) matching.
+- Includes secret scanning and CodeQL analysis when those workflows are enabled.
 
-## How it works
+## How It Works
 
-1. GitHub Actions starts the scheduled workflow.
-2. The Python bot fetches articles from the configured RSS feeds.
-3. Stories are categorized, assessed for priority, and evaluated for SOC relevance.
-4. The bot prepares a digest containing up to 10 stories.
-5. The digest is sent to the configured Slack channel.
-6. Automated tests and security checks run as defined in the workflow.
+1. GitHub Actions starts the workflow on its scheduled run or when manually triggered.
+2. The workflow checks out the repository.
+3. Python is configured and project dependencies are installed.
+4. Automated unit tests run.
+5. Bandit scans the Python bot code.
+6. The bot fetches and processes cybersecurity news.
+7. The formatted digest is posted to Slack.
+8. The workflow reports the quality-check results and fails if the tests or Bandit scan failed.
 
-## Project structure
+**Important:** The workflow can post the Slack digest successfully and still finish with a failed status if automated tests or the security scan fail. A successful Slack message does not mean every check passed.
 
-```text
-cybersecurity-news-automation/
-├── news_bot.py
-├── requirements.txt
-├── tests/
-│   └── test_news_bot.py
-├── .github/
-│   └── workflows/
-│       └── cybersecurity-news.yml
-└── README.md
-```
+## News Sources
 
-## Requirements
+The bot currently uses these sources:
 
-- A GitHub repository
-- A Slack workspace and destination channel
-- A Slack bot token with permission to post messages to the selected channel
-- Python and the dependencies listed in `requirements.txt`
+- [The Hacker News](https://thehackernews.com/)
+- [BleepingComputer](https://www.bleepingcomputer.com/)
+- [Krebs on Security](https://krebsonsecurity.com/)
 
-The scheduled automation runs through GitHub Actions, so you do not need to keep your own computer running.
+News availability and feed content depend on the respective publishers.
 
-## Configuration
+## Automated Schedule
 
-### 1. Configure GitHub Secrets
+The `Daily Cybersecurity News` workflow is scheduled with this GitHub Actions cron expression:
 
-In your repository, open **Settings → Secrets and variables → Actions** and add these repository secrets:
+`30 3 * * *`
+
+GitHub Actions cron schedules use UTC. This schedule corresponds to **03:30 UTC every day**, or **09:00 Sri Lanka Standard Time (UTC+5:30)**.
+
+GitHub-hosted scheduled workflows can occasionally be delayed. They are not guaranteed to start at the exact scheduled minute.
+
+You can also start a run manually:
+
+1. Open the repository on GitHub.
+2. Select **Actions**.
+3. Select **Daily Cybersecurity News**.
+4. Click **Run workflow**.
+5. Select the target branch if prompted.
+6. Click **Run workflow** to start the job.
+
+## Required GitHub Secrets
+
+The bot requires these repository secrets:
 
 | Secret name | Purpose |
-|---|---|
+| --- | --- |
 | `SLACK_BOT_TOKEN` | Authenticates the Slack bot |
 | `SLACK_CHANNEL_ID` | Identifies the Slack channel that receives the digest |
 
-Use the actual secret values in GitHub's secret fields. Never paste tokens or other credentials into source code, documentation, issues, or commit messages.
+Configure secrets under:
 
-The Slack bot must have permission to post messages to the destination channel.
+**Repository → Settings → Secrets and variables → Actions**
 
-### 2. Install Python dependencies
+Add each secret using the exact name shown above.
 
-The `requirements.txt` file should contain:
+Never commit secret values to the repository or include them in screenshots, logs, issues, or documentation. If a token is exposed, revoke or rotate it promptly.
 
-```text
-defusedxml>=0.7.1,<1.0
-```
+The Slack bot must have the appropriate permissions to post messages to the target channel and must be added to the channel when required.
 
-This dependency provides safer XML parsing for RSS feeds.
+## Automated Tests
 
-### 3. Configure the schedule
+The workflow runs the unit tests using:
 
-The workflow uses this cron expression for the daily run:
+`python -m unittest discover -s tests -v`
 
-```yaml
-- cron: '30 3 * * *'
-```
+The tests are stored in the `tests/` directory.
 
-GitHub Actions interprets cron schedules in UTC. This corresponds to **03:30 UTC, or 9:00 AM Sri Lanka time**.
+They help verify expected behavior, including strict CVE matching for KEV detection.
 
-Scheduled workflows can occasionally start later than the requested time because of GitHub Actions scheduling load.
+### Understanding test results
 
-## Testing and security checks
+- **Passed:** The tests completed successfully.
+- **Failed:** One or more tests need investigation.
+- **Skipped or not run:** Check the workflow logs to determine why the step did not execute.
 
-The project includes unit tests in `tests/test_news_bot.py` to verify story categorization, priority handling, and SOC relevance logic.
+A successful Slack delivery is not a replacement for passing unit tests.
 
-The GitHub Actions workflow also runs Bandit to check Python code for common security issues.
+## Python Security Scan
 
-Check the individual step results in the **Actions** tab. If a step is configured with `continue-on-error: true`, a failed check may not prevent later workflow steps from running. A successful Slack delivery therefore does not, by itself, prove every quality check passed.
+The workflow uses Bandit to scan `news_bot.py`:
+
+`python -m bandit -r news_bot.py -ll`
+
+Bandit identifies certain common security issues in Python code. Review its findings to determine whether a change is needed.
+
+A clean Bandit result does not guarantee that the entire application is free of vulnerabilities.
+
+## CISA Known Exploited Vulnerabilities (KEV)
+
+The bot uses a strict **title-only CVE matching policy** to decide whether a story qualifies for a KEV label.
+
+A story qualifies only when:
+
+1. Its title contains a CVE identifier.
+2. That identifier matches a CVE in the CISA KEV catalog used by the bot.
+
+The following do not qualify on their own:
+
+- A CVE identifier appearing only in the article summary.
+- A summary mentioning that CISA added vulnerabilities to the KEV catalog without a matching CVE in the title.
+- A vulnerability described as exploited without a title CVE that matches the catalog.
+
+**A missing KEV label does not prove that a vulnerability is not exploited.** It means the story did not meet the project's strict matching rule.
+
+## Pull Requests and Branch Protection
+
+The repository uses a protected `main` branch and a pull-request workflow.
+
+When the `Daily Cybersecurity News` workflow runs for a pull request targeting `main`, it performs the quality checks but skips the Slack-posting step. This prevents test runs from sending unintended digests to the production Slack channel.
+
+Recommended repository protections include:
+
+- Require pull requests before merging.
+- Require appropriate status checks to pass before merging.
+- Block force pushes to `main`.
+
+If required status checks are configured, select the actual check names reported by GitHub Actions. Confirm that the checks have completed successfully before merging.
 
 ## Troubleshooting
 
-### No Slack digest received
+### The Slack digest was posted, but the workflow failed
+
+The workflow allows the test and Bandit steps to continue after a failure so that the news-posting step can still run. A final step then marks the workflow as failed if either check failed.
+
+To investigate:
 
 1. Open the repository's **Actions** tab.
-2. Open the latest workflow run.
-3. Review the logs for the news collection and Slack posting steps.
-4. Confirm that `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` exist under repository Actions secrets.
-5. Verify that the bot can post to the selected Slack channel.
+2. Select the affected `Daily Cybersecurity News` run.
+3. Open **Run automated tests** and review the output.
+4. Open **Run Python security scan** and review any findings.
+5. Open the final workflow step to see which check caused the failure.
+6. Fix the underlying issue and rerun the workflow.
 
-### Workflow fails during dependency installation
+### No Slack message was received
 
-Confirm that `requirements.txt` exists at the repository root and contains the required dependencies.
+Check the following:
 
-### Tests fail
+- The workflow completed the news-posting step.
+- `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` exist in repository Actions secrets.
+- The token is valid and has the required permissions.
+- The bot can post to the target Slack channel.
+- The workflow logs do not contain Slack API or network errors.
 
-Open the failed test step and identify the failing test before changing the code. Update the relevant logic and tests together, then rerun the workflow.
+Never share the token while troubleshooting.
 
-### No new stories appear
+### No KEV label appeared
 
-RSS feeds can be temporarily unavailable or may not publish new articles. Check the workflow logs before assuming the Slack integration is broken.
+Check whether the article title contains a CVE identifier that matches the CISA KEV catalog. Under the current policy, a CVE appearing only in the summary is insufficient.
 
-## Security considerations
+### The scheduled workflow did not run at the expected time
 
-- Keep Slack credentials in GitHub Secrets.
-- Use HTTPS for external feed and API requests.
-- Parse RSS XML using `defusedxml`.
-- Review test and Bandit results regularly.
-- Give the Slack bot only the permissions it needs.
-- Avoid logging credentials or sensitive information.
+Check the **Actions** tab, confirm the workflow is enabled, and allow for possible GitHub Actions scheduling delays. Use **Run workflow** to trigger a manual run when needed.
 
-## Cost
+### Secret scanning or CodeQL reports a problem
 
-The project is designed to run with GitHub Actions and Slack without requiring a paid news API or a separate always-on server. Actual costs and usage limits depend on your GitHub plan, repository visibility, and any services you choose to add.
+Open the corresponding workflow run and review the failing step. Investigate the finding and follow the recommended remediation. Do not publish credentials or sensitive details while reporting the issue.
 
-## Current status
+## Repository Structure
 
-The project has passed its latest reported GitHub Actions test run, and the Slack digest has been received successfully. Continue checking future scheduled runs to confirm ongoing reliability.
+The main project files include:
 
-## Future improvements
+- `news_bot.py` — news collection, processing, and Slack delivery logic.
+- `tests/test_news_bot.py` — automated unit tests.
+- `requirements.txt` — project dependencies, if present.
+- `.github/workflows/cybersecurity-news.yml` — scheduled news workflow and quality checks.
+- `.github/workflows/gitleaks.yml` — secret-scanning workflow, if present.
+- Other GitHub Actions workflows — additional configured checks, such as CodeQL, if present.
 
-Potential enhancements include:
+The repository contents may evolve as the project is improved.
 
-- Better filtering of duplicate stories
-- More precise vulnerability and threat-intelligence classification
-- Improved reporting of failed RSS feeds
-- More detailed monitoring of workflow health
-- Additional trusted cybersecurity news sources
+## Security Best Practices
 
----
+- Keep all credentials in GitHub Actions secrets.
+- Review test and security scan failures instead of ignoring them.
+- Use pull requests to introduce changes to `main`.
+- Review workflow permissions before adding new actions.
+- Pin third-party GitHub Actions to trusted versions or commit SHAs.
+- Keep project dependencies reasonably up to date.
+- Treat news articles as information sources, not as instructions to execute commands.
+- Do not claim a vulnerability is confirmed in CISA KEV unless it meets the project's matching criteria.
 
-**Built with Python, RSS, Slack, and GitHub Actions.**
+## Limitations
+
+- News availability depends on external RSS feeds and publisher availability.
+- Scheduled GitHub Actions runs can be delayed.
+- Bandit and automated tests cannot detect every possible defect.
+- KEV labels depend on the CVE information in article titles and the catalog data available to the bot.
+- Successful delivery does not guarantee that all quality checks passed.
+
+## License
+
+If this repository includes a `LICENSE` file, refer to it for the applicable license terms. Otherwise, no specific open-source license should be assumed.
