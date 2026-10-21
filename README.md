@@ -1,110 +1,146 @@
 # Cybersecurity News Automation
 
-An automated Python bot that collects cybersecurity news from trusted RSS feeds, prioritizes SOC-relevant stories, categorizes threats, and posts a daily digest to Slack using GitHub Actions.
+An automated Python bot that collects cybersecurity news from trusted RSS feeds, prioritizes relevant stories, categorizes them, and delivers a daily digest to Slack using GitHub Actions.
 
 ## Features
 
-- Fetches news from The Hacker News, BleepingComputer, and Krebs on Security.
-- Removes duplicate article links within each run.
-- Sorts articles by publication date.
-- Prioritizes SOC-relevant stories in the daily digest.
-- Categorizes articles by cybersecurity topic.
-- Assigns HIGH, MEDIUM, or LOW priority labels.
-- Posts the digest to a Slack channel.
-- Runs automatically every day through GitHub Actions.
-- Includes automated unit tests.
+- **Automated daily delivery:** Runs on a scheduled GitHub Actions workflow.
+- **Multiple news sources:** Collects articles from:
+  - [The Hacker News](https://thehackernews.com/)
+  - [BleepingComputer](https://www.bleepingcomputer.com/)
+  - [Krebs on Security](https://krebsonsecurity.com/)
+- **Story categorization:** Groups articles into cybersecurity categories, including vulnerabilities, cyberattacks, malware and ransomware, data breaches, certificate and trust infrastructure, and threat intelligence.
+- **Priority scoring:** Helps surface high-priority cybersecurity stories.
+- **SOC relevance filtering:** Identifies stories that may be useful for Security Operations Center (SOC) monitoring and analysis.
+- **Slack notifications:** Sends the daily digest to a configured Slack channel.
+- **Automated quality checks:** Includes Python unit tests and Bandit security analysis in the GitHub Actions workflow.
 
-## News Sources
-
-- The Hacker News
-- BleepingComputer
-- Krebs on Security
-
-## Technology Stack
-
-- Python 3.12
-- RSS feeds and XML parsing
-- Slack Web API
-- GitHub Actions
-- Python `unittest`
-
-## How It Works
+## How it works
 
 1. GitHub Actions starts the scheduled workflow.
-2. Python fetches articles from the configured RSS feeds.
-3. The bot parses article titles, links, sources, and publication dates.
-4. Duplicate links within the current run are removed.
-5. The newest articles are selected, up to the configured maximum of 10.
-6. SOC-relevant stories are placed first in the digest.
-7. Each story receives a category and priority label.
-8. The digest is posted to Slack.
+2. The Python bot fetches articles from the configured RSS feeds.
+3. Stories are categorized, assessed for priority, and evaluated for SOC relevance.
+4. The bot prepares a digest containing up to 10 stories.
+5. The digest is sent to the configured Slack channel.
+6. Automated tests and security checks run as defined in the workflow.
 
-## Priority Levels
+## Project structure
 
-- 🔴 HIGH — potentially urgent or high-impact security stories.
-- 🟡 MEDIUM — relevant security developments.
-- 🟢 LOW — other stories without matching higher-priority keywords.
+```text
+cybersecurity-news-automation/
+├── news_bot.py
+├── requirements.txt
+├── tests/
+│   └── test_news_bot.py
+├── .github/
+│   └── workflows/
+│       └── cybersecurity-news.yml
+└── README.md
+```
 
-Priority labels are based on title keyword matching and should not be treated as a complete assessment of technical severity.
+## Requirements
 
-## Cybersecurity Categories
+- A GitHub repository
+- A Slack workspace and destination channel
+- A Slack bot token with permission to post messages to the selected channel
+- Python and the dependencies listed in `requirements.txt`
 
-- Vulnerability
-- Malware & Ransomware
-- Spyware & Surveillance
-- Data Breach
-- Certificate & Trust Infrastructure
-- Threat Intelligence
-- Cyberattacks & Intrusions
-- Other
+The scheduled automation runs through GitHub Actions, so you do not need to keep your own computer running.
 
 ## Configuration
 
-Configure the following GitHub Actions repository secrets:
+### 1. Configure GitHub Secrets
 
-- `SLACK_BOT_TOKEN`
-- `SLACK_CHANNEL_ID`
+In your repository, open **Settings → Secrets and variables → Actions** and add these repository secrets:
 
-Never commit actual tokens or credentials to the repository.
+| Secret name | Purpose |
+|---|---|
+| `SLACK_BOT_TOKEN` | Authenticates the Slack bot |
+| `SLACK_CHANNEL_ID` | Identifies the Slack channel that receives the digest |
 
-## Schedule
+Use the actual secret values in GitHub's secret fields. Never paste tokens or other credentials into source code, documentation, issues, or commit messages.
 
-The GitHub Actions workflow uses the cron schedule `30 3 * * *`, which corresponds to 09:00 Sri Lanka Standard Time (UTC+5:30).
+The Slack bot must have permission to post messages to the destination channel.
 
-The workflow can also be triggered manually using `workflow_dispatch`.
+### 2. Install Python dependencies
 
-## Run Locally
+The `requirements.txt` file should contain:
 
-Install dependencies if a `requirements.txt` file is present:
-
-```bash
-python -m pip install -r requirements.txt
+```text
+defusedxml>=0.7.1,<1.0
 ```
 
-Set `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` in your environment, then run:
+This dependency provides safer XML parsing for RSS feeds.
 
-```bash
-python news_bot.py
+### 3. Configure the schedule
+
+The workflow uses this cron expression for the daily run:
+
+```yaml
+- cron: '30 3 * * *'
 ```
 
-## Run Tests
+GitHub Actions interprets cron schedules in UTC. This corresponds to **03:30 UTC, or 9:00 AM Sri Lanka time**.
 
-```bash
-python -m unittest discover -s tests -v
-```
+Scheduled workflows can occasionally start later than the requested time because of GitHub Actions scheduling load.
 
-## Current Limitations
+## Testing and security checks
 
-- Duplicate filtering applies only within a single execution; previously posted articles may appear again on later days.
-- Categorization, SOC relevance, and priority are based on keyword matching.
-- The bot depends on the availability and format of the configured RSS feeds.
-- Failed feed retrievals are logged, and the bot continues processing available feeds.
+The project includes unit tests in `tests/test_news_bot.py` to verify story categorization, priority handling, and SOC relevance logic.
 
-## Project Documentation
+The GitHub Actions workflow also runs Bandit to check Python code for common security issues.
 
-- [Project Architecture](docs/PROJECT_ARCHITECTURE.md)
-- [Development Log](docs/DEVELOPMENT_LOG.md)
+Check the individual step results in the **Actions** tab. If a step is configured with `continue-on-error: true`, a failed check may not prevent later workflow steps from running. A successful Slack delivery therefore does not, by itself, prove every quality check passed.
 
-## License
+## Troubleshooting
 
-Add a license file if you intend to distribute the project as open source.
+### No Slack digest received
+
+1. Open the repository's **Actions** tab.
+2. Open the latest workflow run.
+3. Review the logs for the news collection and Slack posting steps.
+4. Confirm that `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` exist under repository Actions secrets.
+5. Verify that the bot can post to the selected Slack channel.
+
+### Workflow fails during dependency installation
+
+Confirm that `requirements.txt` exists at the repository root and contains the required dependencies.
+
+### Tests fail
+
+Open the failed test step and identify the failing test before changing the code. Update the relevant logic and tests together, then rerun the workflow.
+
+### No new stories appear
+
+RSS feeds can be temporarily unavailable or may not publish new articles. Check the workflow logs before assuming the Slack integration is broken.
+
+## Security considerations
+
+- Keep Slack credentials in GitHub Secrets.
+- Use HTTPS for external feed and API requests.
+- Parse RSS XML using `defusedxml`.
+- Review test and Bandit results regularly.
+- Give the Slack bot only the permissions it needs.
+- Avoid logging credentials or sensitive information.
+
+## Cost
+
+The project is designed to run with GitHub Actions and Slack without requiring a paid news API or a separate always-on server. Actual costs and usage limits depend on your GitHub plan, repository visibility, and any services you choose to add.
+
+## Current status
+
+The project has passed its latest reported GitHub Actions test run, and the Slack digest has been received successfully. Continue checking future scheduled runs to confirm ongoing reliability.
+
+## Future improvements
+
+Potential enhancements include:
+
+- Better filtering of duplicate stories
+- More precise vulnerability and threat-intelligence classification
+- Improved reporting of failed RSS feeds
+- More detailed monitoring of workflow health
+- Additional trusted cybersecurity news sources
+
+---
+
+**Built with Python, RSS, Slack, and GitHub Actions.**
