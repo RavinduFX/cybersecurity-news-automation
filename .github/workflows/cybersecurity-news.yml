@@ -1,9 +1,13 @@
+
 name: Daily Cybersecurity News
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "30 3 * * *"
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -45,7 +49,7 @@ jobs:
         run: python -m bandit -r news_bot.py -ll
 
       - name: Fetch news and post to Slack
-        if: ${{ !cancelled() }}
+        if: ${{ github.event_name != 'pull_request' && !cancelled() }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
