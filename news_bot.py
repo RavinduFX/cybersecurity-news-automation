@@ -1,3 +1,4 @@
+
 import os
 import re
 import html
@@ -22,158 +23,63 @@ FEEDS = [
 
 CATEGORY_KEYWORDS = {
     "🦠 Malware & Ransomware": [
-        "ransomware",
-        "malware",
-        "infostealer",
-        "information stealer",
-        "trojan",
-        "backdoor",
-        "botnet",
-        "credential stealer",
+        "ransomware", "malware", "infostealer",
+        "information stealer", "trojan", "backdoor",
+        "botnet", "credential stealer",
     ],
     "🕵️ Spyware & Surveillance": [
-        "spyware",
-        "surveillance",
-        "stalkerware",
-        "keylogger",
+        "spyware", "surveillance", "stalkerware", "keylogger",
     ],
     "🔓 Data Breach": [
-        "data breach",
-        "data leak",
-        "exposed records",
-        "stolen data",
-        "personal information exposed",
+        "data breach", "data leak", "exposed records",
+        "stolen data", "personal information exposed",
     ],
     "🔐 Certificate & Trust Infrastructure": [
         "certificate authority compromise",
-        "certificate authority",
-        "certificate authorities",
-        "ca compromise",
-        "ca keys",
-        "ca key",
-        "compromised ca",
-        "compromised certificate authority",
-        "certificate authority keys",
-        "certificate authority key",
-        "trust infrastructure",
-        "code signing certificate",
-        "digital certificate",
-        "certificate revocation",
-        "tls certificate",
-        "ssl certificate",
-        "root certificate",
-        "root ca",
-        "certificate issuer",
-        "certificate issuance",
-        "public key infrastructure",
-        "pki",
+        "certificate authority", "certificate authorities",
+        "ca compromise", "ca keys", "ca key",
+        "compromised ca", "compromised certificate authority",
+        "certificate authority keys", "certificate authority key",
+        "trust infrastructure", "code signing certificate",
+        "digital certificate", "certificate revocation",
+        "tls certificate", "ssl certificate", "root certificate",
+        "root ca", "certificate issuer", "certificate issuance",
+        "public key infrastructure", "pki",
     ],
     "🎯 Threat Intelligence": [
-        "threat intelligence",
-        "threat actor",
-        "indicators of compromise",
-        "ioc",
-        "apt group",
+        "threat intelligence", "threat actor",
+        "indicators of compromise", "ioc", "apt group",
         "cyber espionage",
     ],
     "🛡️ Cyberattacks & Intrusions": [
-        "cyberattack campaign",
-        "cyberattack",
-        "cyber attacks",
-        "cyber attack",
-        "cybercriminal attack",
-        "cyber crime",
-        "cybercrime",
-        "unauthorized access",
-        "hacking",
-        "hacker",
-        "hackers",
-        "intrusion",
-        "phishing",
-        "account takeover",
-        "security breach",
-        "network attack",
-        "computer attack",
-        "systems compromised",
-        "system compromised",
-        "compromised by hackers",
-        "websites compromised",
-        "compromised by attackers",
-        "attacker gained access",
-        "attack campaign",
-        "breached network",
+        "cyberattack campaign", "cyberattack", "cyber attacks",
+        "cyber attack", "cybercriminal attack", "cyber crime",
+        "cybercrime", "unauthorized access", "hacking", "hacker",
+        "hackers", "intrusion", "phishing", "account takeover",
+        "security breach", "network attack", "computer attack",
+        "systems compromised", "system compromised",
+        "compromised by hackers", "websites compromised",
+        "compromised by attackers", "attacker gained access",
+        "attack campaign", "breached network",
     ],
     "🚨 Vulnerability": [
-        "critical vulnerability",
-        "vulnerability",
-        "zero-day",
-        "zero day",
-        "security flaw",
-        "remote code execution",
-        "rce",
-        "privilege escalation",
-        "exploit",
+        "critical vulnerability", "vulnerability", "zero-day",
+        "zero day", "security flaw", "remote code execution",
+        "rce", "privilege escalation", "exploit",
         "authentication bypass",
     ],
 }
 
 
-HIGH_PRIORITY_KEYWORDS = [
-    "critical vulnerability",
-    "critical flaw",
-    "zero-day",
-    "zero day",
-    "actively exploited",
-    "remote code execution",
-    "rce",
-    "ransomware",
-    "data breach",
-    "credential theft",
-    "backdoor",
-    "keys compromised",
-    "key compromised",
-]
-
-
-MEDIUM_PRIORITY_KEYWORDS = [
-    "vulnerability",
-    "exploit",
-    "malware",
-    "phishing",
-    "cyberattack",
-    "cyber attack",
-    "security flaw",
-    "patch",
-    "botnet",
-    "spyware",
-    "certificate authority",
-]
-
-
 SOC_KEYWORDS = [
-    "threat intelligence",
-    "incident response",
-    "security operations",
-    "soc",
-    "siem",
-    "detection",
-    "indicators of compromise",
-    "ioc",
-    "intrusion",
-    "malware",
-    "ransomware",
-    "phishing",
-    "exploit",
-    "vulnerability",
-    "data breach",
-    "cyberattack",
-    "cyber attack",
-    "zero-day",
-    "zero day",
-    "certificate authority",
-    "unauthorized access",
-    "compromised by hackers",
-    "hackers",
+    "threat intelligence", "incident response",
+    "security operations", "soc", "siem", "detection",
+    "indicators of compromise", "ioc", "intrusion",
+    "malware", "ransomware", "phishing", "exploit",
+    "vulnerability", "data breach", "cyberattack",
+    "cyber attack", "zero-day", "zero day",
+    "certificate authority", "unauthorized access",
+    "compromised by hackers", "hackers",
 ]
 
 
@@ -226,16 +132,57 @@ def categorize_story(story, summary=""):
 
 
 def prioritize_story(story, summary=""):
-    """Return a human-readable priority label."""
+    """
+    Assign severity only when a recognizable CVSS score is present.
+    This does not independently verify the score against its source.
+    """
     text = story_text(story, summary)
 
-    if any(keyword in text for keyword in HIGH_PRIORITY_KEYWORDS):
-        return "🔴 HIGH"
+    # Match explicit CVSS score wording, not arbitrary numbers.
+    match = re.search(
+        r"\bCVSS(?:\s*v?[34](?:\.0)?)?"
+        r"\s*(?:score)?\s*(?:of|is|[:=])?\s*"
+        r"(10(?:\.0)?|[0-9](?:\.\d)?)\b",
+        text,
+        re.IGNORECASE,
+    )
 
-    if any(keyword in text for keyword in MEDIUM_PRIORITY_KEYWORDS):
+    if not match:
+        return "⚪ UNVERIFIED"
+
+    score = float(match.group(1))
+
+    if not 0.0 <= score <= 10.0:
+        return "⚪ UNVERIFIED"
+
+    if score == 0.0:
+        return "⚪ NONE"
+    if score >= 9.0:
+        return "🚨 CRITICAL"
+    if score >= 7.0:
+        return "🔴 HIGH"
+    if score >= 4.0:
         return "🟡 MEDIUM"
 
     return "🟢 LOW"
+
+
+def needs_urgent_attention(story, summary=""):
+    """
+    Flag possible urgency separately from severity.
+    This is a keyword-based indicator, not verification.
+    """
+    text = story_text(story, summary)
+
+    urgent_phrases = [
+        "actively exploited",
+        "exploited in the wild",
+        "exploitation in the wild",
+        "emergency security update",
+        "emergency security patch",
+    ]
+
+    return any(phrase in text for phrase in urgent_phrases)
 
 
 def is_soc_relevant(story, summary=""):
@@ -272,7 +219,6 @@ class HTTPSOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
         self, request, response, code, message, headers, new_url
     ):
         validate_https_url(new_url)
-
         return super().redirect_request(
             request, response, code, message, headers, new_url
         )
@@ -349,9 +295,12 @@ def build_digest(stories):
         return "No cybersecurity news stories were available today."
 
     priority_scores = {
-        "🔴 HIGH": 3,
-        "🟡 MEDIUM": 2,
-        "🟢 LOW": 1,
+        "🚨 CRITICAL": 5,
+        "🔴 HIGH": 4,
+        "🟡 MEDIUM": 3,
+        "🟢 LOW": 2,
+        "⚪ NONE": 1,
+        "⚪ UNVERIFIED": 0,
     }
 
     oldest_date = datetime.min.replace(tzinfo=timezone.utc)
@@ -376,6 +325,12 @@ def build_digest(stories):
 
     for index, story in enumerate(selected_stories, start=1):
         priority = prioritize_story(story)
+        urgency = (
+            " | 🚨 POSSIBLY URGENT"
+            if needs_urgent_attention(story)
+            else ""
+        )
+
         category = categorize_story(story)
         title = escape_slack_text(story["title"])
         source = escape_slack_text(story["source"])
@@ -383,7 +338,7 @@ def build_digest(stories):
 
         lines.append(
             f"{index}. *<{link}|{title}>*\n"
-            f"   {priority} | {category} | {source}"
+            f"   {priority}{urgency} | {category} | {source}"
         )
 
         summary = story.get("summary", "")
