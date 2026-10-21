@@ -19,26 +19,42 @@ FEEDS = [
     ("Krebs on Security", "https://krebsonsecurity.com/feed/"),
 ]
 
+
 CATEGORY_KEYWORDS = {
     "🦠 Malware & Ransomware": [
-        "ransomware", "malware", "infostealer",
-        "information stealer", "trojan", "backdoor",
-        "botnet", "credential stealer",
+        "ransomware",
+        "malware",
+        "infostealer",
+        "information stealer",
+        "trojan",
+        "backdoor",
+        "botnet",
+        "credential stealer",
     ],
     "🕵️ Spyware & Surveillance": [
-        "spyware", "surveillance", "stalkerware", "keylogger",
+        "spyware",
+        "surveillance",
+        "stalkerware",
+        "keylogger",
     ],
     "🔓 Data Breach": [
-        "data breach", "data leak", "exposed records",
-        "stolen data", "personal information exposed",
+        "data breach",
+        "data leak",
+        "exposed records",
+        "stolen data",
+        "personal information exposed",
     ],
     "🔐 Certificate & Trust Infrastructure": [
         "certificate authority compromise",
         "certificate authority",
         "certificate authorities",
         "ca compromise",
+        "ca keys",
+        "ca key",
         "compromised ca",
         "compromised certificate authority",
+        "certificate authority keys",
+        "certificate authority key",
         "trust infrastructure",
         "code signing certificate",
         "digital certificate",
@@ -53,9 +69,12 @@ CATEGORY_KEYWORDS = {
         "pki",
     ],
     "🎯 Threat Intelligence": [
-        "threat intelligence", "threat actor",
-        "indicators of compromise", "ioc",
-        "apt group", "cyber espionage",
+        "threat intelligence",
+        "threat actor",
+        "indicators of compromise",
+        "ioc",
+        "apt group",
+        "cyber espionage",
     ],
     "🛡️ Cyberattacks & Intrusions": [
         "cyberattack campaign",
@@ -67,6 +86,8 @@ CATEGORY_KEYWORDS = {
         "cybercrime",
         "unauthorized access",
         "hacking",
+        "hacker",
+        "hackers",
         "intrusion",
         "phishing",
         "account takeover",
@@ -75,6 +96,9 @@ CATEGORY_KEYWORDS = {
         "computer attack",
         "systems compromised",
         "system compromised",
+        "compromised by hackers",
+        "websites compromised",
+        "compromised by attackers",
         "attacker gained access",
         "attack campaign",
         "breached network",
@@ -93,6 +117,7 @@ CATEGORY_KEYWORDS = {
     ],
 }
 
+
 HIGH_PRIORITY_KEYWORDS = [
     "critical vulnerability",
     "critical flaw",
@@ -104,9 +129,11 @@ HIGH_PRIORITY_KEYWORDS = [
     "ransomware",
     "data breach",
     "credential theft",
-    "privilege escalation",
     "backdoor",
+    "keys compromised",
+    "key compromised",
 ]
+
 
 MEDIUM_PRIORITY_KEYWORDS = [
     "vulnerability",
@@ -121,6 +148,7 @@ MEDIUM_PRIORITY_KEYWORDS = [
     "spyware",
     "certificate authority",
 ]
+
 
 SOC_KEYWORDS = [
     "threat intelligence",
@@ -144,11 +172,13 @@ SOC_KEYWORDS = [
     "zero day",
     "certificate authority",
     "unauthorized access",
+    "compromised by hackers",
+    "hackers",
 ]
 
 
 def clean_text(value):
-    """Decode HTML entities and remove markup."""
+    """Decode HTML entities and remove markup from feed text."""
     if not value:
         return ""
 
@@ -175,7 +205,7 @@ def parse_date(value):
 
 
 def story_text(story, summary=""):
-    """Support both story dictionaries and plain-text inputs."""
+    """Get searchable text from a story dictionary or title."""
     if isinstance(story, dict):
         title = story.get("title", "")
         description = story.get("summary", "")
@@ -185,7 +215,7 @@ def story_text(story, summary=""):
 
 
 def categorize_story(story, summary=""):
-    """Categorize a story using title and summary keywords."""
+    """Assign a cybersecurity category based on keywords."""
     text = story_text(story, summary)
 
     for category, keywords in CATEGORY_KEYWORDS.items():
@@ -209,13 +239,13 @@ def prioritize_story(story, summary=""):
 
 
 def is_soc_relevant(story, summary=""):
-    """Check whether a story is relevant to security operations."""
+    """Identify stories relevant to security operations."""
     text = story_text(story, summary)
     return any(keyword in text for keyword in SOC_KEYWORDS)
 
 
 def validate_https_url(url, allowed_hosts=None):
-    """Require HTTPS and optionally restrict hostnames."""
+    """Reject non-HTTPS URLs and optionally restrict hostnames."""
     parsed = urlparse(url)
 
     if (
@@ -236,7 +266,7 @@ def validate_https_url(url, allowed_hosts=None):
 
 
 class HTTPSOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Reject redirects to non-HTTPS URLs."""
+    """Prevent redirects to non-HTTPS URLs."""
 
     def redirect_request(
         self, request, response, code, message, headers, new_url
@@ -305,7 +335,7 @@ def fetch_feed(source, url):
 
 
 def escape_slack_text(value):
-    """Escape special characters in Slack message text."""
+    """Escape special characters in Slack text."""
     return (
         value.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -314,7 +344,7 @@ def escape_slack_text(value):
 
 
 def build_digest(stories):
-    """Build a digest prioritizing SOC-relevant stories."""
+    """Build a digest with SOC-relevant stories first."""
     if not stories:
         return "No cybersecurity news stories were available today."
 
@@ -324,15 +354,14 @@ def build_digest(stories):
         "🟢 LOW": 1,
     }
 
+    oldest_date = datetime.min.replace(tzinfo=timezone.utc)
+
     ordered_stories = sorted(
         stories,
         key=lambda story: (
             is_soc_relevant(story),
             priority_scores[prioritize_story(story)],
-            story.get(
-                "published",
-                datetime.min.replace(tzinfo=timezone.utc),
-            ),
+            story.get("published", oldest_date),
         ),
         reverse=True,
     )
@@ -373,7 +402,7 @@ def build_digest(stories):
 
 
 def post_to_slack(message):
-    """Post the digest using GitHub Actions secrets."""
+    """Post the digest using credentials stored in GitHub Secrets."""
     token = os.environ.get("SLACK_BOT_TOKEN")
     channel = os.environ.get("SLACK_CHANNEL_ID")
 
