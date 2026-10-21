@@ -1,4 +1,3 @@
-
 import os
 import re
 import html
@@ -19,6 +18,42 @@ FEEDS = [
     ("BleepingComputer", "https://www.bleepingcomputer.com/feed/"),
     ("Krebs on Security", "https://krebsonsecurity.com/feed/"),
 ]
+
+# Use one opener for HTTPS requests instead of urllib.request.urlopen.
+HTTPS_OPENER = urllib.request.build_opener(
+    urllib.request.HTTPSHandler()
+)
+
+CATEGORY_KEYWORDS = {
+    "🚨 Vulnerability": [
+        "vulnerability", "cve-", "zero-day", "zero day",
+        "security flaw", "remote code execution", "rce",
+        "privilege escalation",
+    ],
+    "🦠 Malware & Ransomware": [
+        "malware", "ransomware", "trojan", "infostealer",
+        "backdoor", "botnet",
+    ],
+    "🕵️ Spyware & Surveillance": [
+        "spyware", "surveillance", "stalkerware", "keylogger",
+    ],
+    "🔓 Data Breach": [
+        "data breach", "data leak", "exposed records",
+        "stolen data", "credential theft",
+    ],
+    "🔐 Certificate & Trust Infrastructure": [
+        "certificate", "certification authority", "tls",
+        "ssl", "code signing",
+    ],
+    "🎯 Threat Intelligence": [
+        "threat intelligence", "apt", "threat actor",
+        "indicators of compromise", "ioc",
+    ],
+    "🛡️ Cyberattacks & Intrusions": [
+        "cyberattack", "cyber attack", "hacking",
+        "intrusion", "phishing", "exploit",
+    ],
+}
 
 HIGH_PRIORITY_KEYWORDS = [
     "critical vulnerability",
@@ -80,7 +115,7 @@ def clean_text(value):
 
 
 def parse_date(value):
-    """Parse a published date and return a UTC datetime."""
+    """Parse a published date and normalize it to UTC."""
     if not value:
         return datetime.min.replace(tzinfo=timezone.utc)
 
@@ -96,9 +131,31 @@ def parse_date(value):
         return datetime.min.replace(tzinfo=timezone.utc)
 
 
-def prioritize_story(story):
-    """Assign a priority score based on security keywords."""
-    text = f"{story['title']} {story['summary']}".lower()
+def story_text(story, summary=""):
+    """Support either a story dictionary or title plus summary."""
+    if isinstance(story, dict):
+        return (
+            f"{story.get('title', '')} "
+            f"{story.get('summary', '')}"
+        ).lower()
+
+    return f"{story} {summary}".lower()
+
+
+def categorize_story(story, summary=""):
+    """Assign a security category using story keywords."""
+    text = story_text(story, summary)
+
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            return category
+
+    return "📰 Other"
+
+
+def prioritize_story(story, summary=""):
+    """Return a numeric priority score: high 3, medium 2, low 1."""
+    text = story_text(story, summary)
 
     if any(keyword in text for keyword in HIGH_PRIORITY_KEYWORDS):
         return 3
@@ -109,31 +166,42 @@ def prioritize_story(story):
     return 1
 
 
-def is_soc_relevant(story):
-    """Return True when a story is relevant to SOC work."""
-    text = f"{story['title']} {story['summary']}".lower()
+def is_soc_relevant(story, summary=""):
+    """Identify stories relevant to security operations."""
+    text = story_text(story, summary)
     return any(keyword in text for keyword in SOC_KEYWORDS)
 
 
-def fetch_feed(source, url):
-    """Fetch and parse an RSS feed from a validated HTTPS URL."""
-    try:
-        parsed_url = urlparse(url)
+def validate_https_url(url, allowed_hosts=None):
+    """Reject non-HTTPS URLs and optionally restrict hostnames."""
+    parsed = urlparse(url)
 
-        if (
-            parsed_url.scheme != "https"
-            or not parsed_url.hostname
-            or parsed_url.username
-            or parsed_url.password
-        ):
-            raise ValueError("Only valid HTTPS feed URLs are allowed.")
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+    ):
+        raise ValueError("Only valid HTTPS URLs are allowed.")
+
+    if allowed_hosts is not None:
+        if parsed.hostname.lower() not in allowed_hosts:
+            raise ValueError("URL hostname is not allowed.")
+
+    return parsed
+
+
+def fetch_feed(source, url):
+    """Fetch and parse a trusted RSS feed."""
+    try:
+        validate_https_url(url)
 
         request = urllib.request.Request(
             url,
             headers={"User-Agent": "CybersecurityNewsBot/1.0"},
         )
 
-        with urllib.request.urlopen(
+        with HTTPS_OPENER.open(
             request, timeout=TIMEOUT_SECONDS
         ) as response:
             content = response.read()
@@ -152,25 +220,18 @@ def fetch_feed(source, url):
             if not title or not link:
                 continue
 
-            link_url = urlparse(link)
-
-            if (
-                link_url.scheme != "https"
-                or not link_url.hostname
-                or link_url.username
-                or link_url.password
-            ):
+            try:
+                validate_https_url(link)
+            except ValueError:
                 continue
 
-            stories.append(
-                {
-                    "source": source,
-                    "title": title,
-                    "link": link,
-                    "summary": summary,
-                    "published": parse_date(published),
-                }
-            )
+            stories.append({
+                "source": source,
+                "title": title,
+                "link": link,
+                "summary": summary,
+                "published": parse_date(published),
+            })
 
         print(f"Fetched {len(stories)} stories from {source}")
         return stories
@@ -181,7 +242,7 @@ def fetch_feed(source, url):
 
 
 def escape_slack_text(value):
-    """Escape Slack's special characters in plain text."""
+    """Escape special characters in Slack text."""
     return (
         value.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -190,7 +251,7 @@ def escape_slack_text(value):
 
 
 def build_digest(stories):
-    """Build a Slack digest with SOC-relevant stories first."""
+    """Build a digest with SOC-relevant and high-priority stories first."""
     if not stories:
         return "No cybersecurity news stories were available today."
 
@@ -216,23 +277,25 @@ def build_digest(stories):
         priority = prioritize_story(story)
 
         if priority == 3:
-            category = "🚨 High Priority"
+            priority_label = "🚨 High Priority"
         elif priority == 2:
-            category = "⚠️ Medium Priority"
+            priority_label = "⚠️ Medium Priority"
         else:
-            category = "📰 General"
+            priority_label = "📰 General"
 
+        category = categorize_story(story)
         title = escape_slack_text(story["title"])
         source = escape_slack_text(story["source"])
         link = story["link"]
 
         lines.append(
             f"{index}. *<{link}|{title}>*\n"
-            f"   {category} | {source}"
+            f"   {priority_label} | {category} | {source}"
         )
 
         if story["summary"]:
             summary = escape_slack_text(story["summary"])
+
             if len(summary) > 250:
                 summary = summary[:247] + "..."
 
@@ -244,7 +307,7 @@ def build_digest(stories):
 
 
 def post_to_slack(message):
-    """Post the digest to Slack using credentials from environment secrets."""
+    """Post the digest using credentials stored in GitHub Secrets."""
     token = os.environ.get("SLACK_BOT_TOKEN")
     channel = os.environ.get("SLACK_CHANNEL_ID")
 
@@ -254,23 +317,15 @@ def post_to_slack(message):
         )
 
     slack_url = "https://slack.com/api/chat.postMessage"
-    parsed_url = urlparse(slack_url)
+    validate_https_url(slack_url, allowed_hosts={"slack.com"})
 
-    if (
-        parsed_url.scheme != "https"
-        or parsed_url.hostname != "slack.com"
-    ):
-        raise RuntimeError("Invalid Slack API URL.")
-
-    payload = json.dumps(
-        {
-            "channel": channel,
-            "text": message,
-            "mrkdwn": True,
-            "unfurl_links": False,
-            "unfurl_media": False,
-        }
-    ).encode("utf-8")
+    payload = json.dumps({
+        "channel": channel,
+        "text": message,
+        "mrkdwn": True,
+        "unfurl_links": False,
+        "unfurl_media": False,
+    }).encode("utf-8")
 
     request = urllib.request.Request(
         slack_url,
@@ -283,10 +338,12 @@ def post_to_slack(message):
     )
 
     try:
-        with urllib.request.urlopen(
+        with HTTPS_OPENER.open(
             request, timeout=TIMEOUT_SECONDS
         ) as response:
-            result = json.loads(response.read().decode("utf-8"))
+            result = json.loads(
+                response.read().decode("utf-8")
+            )
 
     except urllib.error.HTTPError as error:
         raise RuntimeError(
@@ -302,14 +359,12 @@ def post_to_slack(message):
 
 
 def main():
-    """Fetch feeds, deduplicate stories, and post the daily digest."""
+    """Fetch feeds, deduplicate stories, and post the digest."""
     all_stories = []
     seen_links = set()
 
     for source, url in FEEDS:
-        stories = fetch_feed(source, url)
-
-        for story in stories:
+        for story in fetch_feed(source, url):
             if story["link"] not in seen_links:
                 seen_links.add(story["link"])
                 all_stories.append(story)
@@ -319,8 +374,7 @@ def main():
         reverse=True,
     )
 
-    digest = build_digest(all_stories)
-    post_to_slack(digest)
+    post_to_slack(build_digest(all_stories))
 
 
 if __name__ == "__main__":
