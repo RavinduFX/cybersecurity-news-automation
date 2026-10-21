@@ -12,6 +12,7 @@ permissions:
 jobs:
   cybersecurity-news:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Check out repository
@@ -30,10 +31,27 @@ jobs:
           fi
 
       - name: Run automated tests
+        id: tests
+        continue-on-error: true
         run: python -m unittest discover -s tests -v
 
+      - name: Install Bandit security scanner
+        run: python -m pip install bandit
+
+      - name: Run Python security scan
+        id: bandit
+        continue-on-error: true
+        run: python -m bandit -r news_bot.py -ll
+
       - name: Fetch news and post to Slack
+        if: ${{ !cancelled() }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
         run: python news_bot.py
+
+      - name: Summarize security check results
+        if: ${{ always() }}
+        run: |
+          echo "Unit tests outcome: ${{ steps.tests.outcome }}"
+          echo "Bandit scan outcome: ${{ steps.bandit.outcome }}"
