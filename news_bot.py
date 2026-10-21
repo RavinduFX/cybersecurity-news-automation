@@ -1,3 +1,4 @@
+
 import os
 import re
 import html
@@ -19,44 +20,82 @@ FEEDS = [
     ("Krebs on Security", "https://krebsonsecurity.com/feed/"),
 ]
 
-# Use one opener for HTTPS requests instead of urllib.request.urlopen.
+# Use an HTTPS handler for outbound HTTP requests.
 HTTPS_OPENER = urllib.request.build_opener(
     urllib.request.HTTPSHandler()
 )
 
 CATEGORY_KEYWORDS = {
-    "🚨 Vulnerability": [
-        "vulnerability", "cve-", "zero-day", "zero day",
-        "security flaw", "remote code execution", "rce",
-        "privilege escalation",
-    ],
     "🦠 Malware & Ransomware": [
-        "malware", "ransomware", "trojan", "infostealer",
-        "backdoor", "botnet",
+        "ransomware",
+        "malware",
+        "infostealer",
+        "information stealer",
+        "trojan",
+        "backdoor",
+        "botnet",
+        "credential stealer",
     ],
     "🕵️ Spyware & Surveillance": [
-        "spyware", "surveillance", "stalkerware", "keylogger",
+        "spyware",
+        "surveillance",
+        "stalkerware",
+        "keylogger",
     ],
     "🔓 Data Breach": [
-        "data breach", "data leak", "exposed records",
-        "stolen data", "credential theft",
+        "data breach",
+        "data leak",
+        "exposed records",
+        "stolen data",
+        "personal information exposed",
     ],
     "🔐 Certificate & Trust Infrastructure": [
-        "certificate", "certification authority", "tls",
-        "ssl", "code signing",
+        "certificate authority compromise",
+        "certificate authority",
+        "ca compromise",
+        "trust infrastructure",
+        "code signing certificate",
+        "digital certificate",
+        "certificate revocation",
+        "tls certificate",
+        "ssl certificate",
     ],
     "🎯 Threat Intelligence": [
-        "threat intelligence", "apt", "threat actor",
-        "indicators of compromise", "ioc",
+        "threat intelligence",
+        "threat actor",
+        "indicators of compromise",
+        "ioc",
+        "apt group",
+        "cyber espionage",
     ],
     "🛡️ Cyberattacks & Intrusions": [
-        "cyberattack", "cyber attack", "hacking",
-        "intrusion", "phishing", "exploit",
+        "cyberattack campaign",
+        "cyberattack",
+        "cyber attack",
+        "unauthorized access",
+        "hacking",
+        "intrusion",
+        "phishing",
+        "account takeover",
+        "security breach",
+    ],
+    "🚨 Vulnerability": [
+        "critical vulnerability",
+        "vulnerability",
+        "zero-day",
+        "zero day",
+        "security flaw",
+        "remote code execution",
+        "rce",
+        "privilege escalation",
+        "exploit",
+        "authentication bypass",
     ],
 }
 
 HIGH_PRIORITY_KEYWORDS = [
     "critical vulnerability",
+    "critical flaw",
     "zero-day",
     "zero day",
     "actively exploited",
@@ -66,6 +105,7 @@ HIGH_PRIORITY_KEYWORDS = [
     "data breach",
     "credential theft",
     "privilege escalation",
+    "backdoor",
 ]
 
 MEDIUM_PRIORITY_KEYWORDS = [
@@ -77,8 +117,9 @@ MEDIUM_PRIORITY_KEYWORDS = [
     "cyber attack",
     "security flaw",
     "patch",
-    "backdoor",
     "botnet",
+    "spyware",
+    "certificate authority",
 ]
 
 SOC_KEYWORDS = [
@@ -132,7 +173,7 @@ def parse_date(value):
 
 
 def story_text(story, summary=""):
-    """Support either a story dictionary or title plus summary."""
+    """Get searchable text from a story dictionary or title."""
     if isinstance(story, dict):
         return (
             f"{story.get('title', '')} "
@@ -143,7 +184,7 @@ def story_text(story, summary=""):
 
 
 def categorize_story(story, summary=""):
-    """Assign a security category using story keywords."""
+    """Assign a cybersecurity category based on keywords."""
     text = story_text(story, summary)
 
     for category, keywords in CATEGORY_KEYWORDS.items():
@@ -154,16 +195,16 @@ def categorize_story(story, summary=""):
 
 
 def prioritize_story(story, summary=""):
-    """Return a numeric priority score: high 3, medium 2, low 1."""
+    """Return the priority label expected by the test suite."""
     text = story_text(story, summary)
 
     if any(keyword in text for keyword in HIGH_PRIORITY_KEYWORDS):
-        return 3
+        return "🔴 HIGH"
 
     if any(keyword in text for keyword in MEDIUM_PRIORITY_KEYWORDS):
-        return 2
+        return "🟡 MEDIUM"
 
-    return 1
+    return "🟢 LOW"
 
 
 def is_soc_relevant(story, summary=""):
@@ -192,7 +233,7 @@ def validate_https_url(url, allowed_hosts=None):
 
 
 def fetch_feed(source, url):
-    """Fetch and parse a trusted RSS feed."""
+    """Fetch and parse a cybersecurity RSS feed."""
     try:
         validate_https_url(url)
 
@@ -251,15 +292,21 @@ def escape_slack_text(value):
 
 
 def build_digest(stories):
-    """Build a digest with SOC-relevant and high-priority stories first."""
+    """Build a digest with SOC-relevant stories first."""
     if not stories:
         return "No cybersecurity news stories were available today."
+
+    priority_scores = {
+        "🔴 HIGH": 3,
+        "🟡 MEDIUM": 2,
+        "🟢 LOW": 1,
+    }
 
     ordered_stories = sorted(
         stories,
         key=lambda story: (
             is_soc_relevant(story),
-            prioritize_story(story),
+            priority_scores[prioritize_story(story)],
             story["published"],
         ),
         reverse=True,
@@ -274,16 +321,9 @@ def build_digest(stories):
     ]
 
     for index, story in enumerate(selected_stories, start=1):
-        priority = prioritize_story(story)
-
-        if priority == 3:
-            priority_label = "🚨 High Priority"
-        elif priority == 2:
-            priority_label = "⚠️ Medium Priority"
-        else:
-            priority_label = "📰 General"
-
+        priority_label = prioritize_story(story)
         category = categorize_story(story)
+
         title = escape_slack_text(story["title"])
         source = escape_slack_text(story["source"])
         link = story["link"]
@@ -359,7 +399,7 @@ def post_to_slack(message):
 
 
 def main():
-    """Fetch feeds, deduplicate stories, and post the digest."""
+    """Fetch feeds, deduplicate stories, and post the daily digest."""
     all_stories = []
     seen_links = set()
 
