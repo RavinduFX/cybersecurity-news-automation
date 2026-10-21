@@ -1,236 +1,285 @@
 # Project Architecture
 
-## 1. Overview
+## 1. Project Overview
 
-Cybersecurity News Automation is a Python application that collects cybersecurity news from configured RSS feeds, categorizes headlines, assigns priority labels, prioritizes SOC-relevant stories, and sends a daily digest to Slack.
+The Cybersecurity News Automation Bot is a Python application that collects cybersecurity news from configured sources and posts a digest to a Slack channel using GitHub Actions.
 
-GitHub Actions provides scheduled execution, manual execution, automated testing, and security scanning.
+The project is designed to automate routine news collection while supporting automated testing and security checks.
+
+### Main objectives
+
+- Collect cybersecurity news from configured sources.
+- Process news articles and prepare a digest.
+- Match CVE identifiers in story titles against the configured CISA Known Exploited Vulnerabilities (KEV) catalog.
+- Deliver the digest to a configured Slack channel.
+- Run automated tests and security scans through GitHub Actions.
+- Keep credentials outside the source code.
 
 ## 2. High-Level Architecture
 
-```text
-GitHub Actions
-      |
-      v
-Set up Python 3.12
-      |
-      v
-Install Dependencies
-      |
-      v
-Run Unit Tests
-      |
-      v
-Run Bandit Security Scan
-      |
-      v
-Execute news_bot.py
-      |
-      v
-Fetch Configured RSS Feeds
-      |
-      v
-Parse and Normalize Articles
-      |
-      v
-Sort Articles and Remove
-Duplicate URLs Within the Run
-      |
-      v
-Select Up to 10 Stories
-      |
-      v
-Evaluate SOC Relevance
-      |
-      v
-Categorize and Assign Priorities
-      |
-      v
-Build Digest
-      |
-      v
-Post Digest to Slack
-      |
-      v
-Summarize Checks and Report Failures
+```mermaid
+flowchart TD
+    A["The Hacker News RSS Feed"]
+    B["BleepingComputer RSS Feed"]
+    C["Krebs on Security RSS Feed"]
+
+    D["GitHub Actions Workflow"]
+    E["Python Application: news_bot.py"]
+    F["Fetch and Parse News"]
+    G["Process Articles"]
+    H["Strict Title-Only CISA KEV Matching"]
+    I["Build News Digest"]
+    J["Post Digest to Slack"]
+
+    K["GitHub Actions Secrets"]
+    L["Unit Tests"]
+    M["Bandit Security Scan"]
+    N["Gitleaks Secret Scan"]
+    O["CodeQL Analysis"]
+
+    A --> D
+    B --> D
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+
+    K -. "Runtime credentials" .-> E
+
+    D --> L
+    D --> M
+    N -. "Separate security workflow" .-> D
+    O -. "Separate code analysis workflow" .-> D
 ```
 
-The workflow allows the news-delivery step to run after test or Bandit failures, provided the workflow has not been cancelled. A final check marks the overall workflow as failed if either quality check fails.
+**Note:** This is a conceptual diagram. The news-processing sequence illustrates the intended application flow; confirm the exact implementation against the current Python code and workflow files.
 
 ## 3. News Sources
 
-The configured RSS sources are:
+The configured news sources are:
 
 - [The Hacker News](https://thehackernews.com/)
 - [BleepingComputer](https://www.bleepingcomputer.com/)
 - [Krebs on Security](https://krebsonsecurity.com/)
 
-The application retrieves feed data over HTTPS and parses XML using `defusedxml`.
+The application retrieves articles from the feeds configured in the source code.
 
-If a feed cannot be retrieved or parsed, error handling is intended to allow processing of other sources to continue where possible.
+News feeds are external inputs. They may be unavailable, malformed, delayed, or changed by their publishers. External article content must not be treated as trusted instructions or executable code.
 
-## 4. Article Data and Processing
+## 4. Application Components
 
-Articles are represented using fields such as:
+### 4.1 Python Application
 
-- `source` — name of the news source.
-- `title` — article headline.
-- `link` — article URL.
-- `published` — publication date, when available.
+**Main file:** `news_bot.py`
 
-The processing pipeline sorts stories by publication date, removes duplicate URLs within the current execution, and limits the digest to a maximum of 10 stories.
+The Python application is responsible for the news automation process and Slack delivery.
 
-Duplicate filtering is not persistent between executions.
+Its overall responsibilities include:
 
-## 5. SOC Relevance
+1. Reading the configured runtime credentials.
+2. Retrieving and processing news from configured sources.
+3. Applying the project's article-processing and KEV-matching rules.
+4. Preparing the digest.
+5. Attempting to deliver the digest to Slack.
 
-The `is_soc_relevant(story)` function evaluates headlines against configured cybersecurity keywords.
+The exact parsing, filtering, sorting, and duplicate-handling behavior depends on the current implementation.
 
-Relevant topics may include:
+### 4.2 CISA KEV Detection
 
-- Vulnerabilities and CVEs
-- Exploitation and remote code execution
-- Malware and ransomware
-- Phishing and spyware
-- Data breaches and credential theft
-- Threat actors and intrusions
-- Certificate authority compromise
-- Security incidents and advisories
+The project uses a strict title-only CVE matching policy.
 
-SOC-relevant stories receive higher placement in the digest. This is keyword-based prioritization, not a replacement for professional security analysis.
+The intended logic is:
 
-## 6. Categorization
+1. Extract CVE identifiers from a story's title.
+2. Compare those identifiers against the configured KEV catalog.
+3. Mark the story as a KEV match only when a title CVE is present in that catalog.
 
-The `categorize_story(story)` function assigns a category based on configured headline keywords.
+A CVE found only in a story summary must not trigger a KEV match.
 
-Supported categories include:
+This policy is intentionally strict. It may miss relevant vulnerabilities when a CVE identifier is absent from the title. A KEV match also does not establish whether a particular system or organization is affected.
 
-1. Vulnerability
-2. Malware & Ransomware
-3. Spyware & Surveillance
-4. Data Breach
-5. Certificate & Trust Infrastructure
-6. Threat Intelligence
-7. Cyberattacks & Intrusions
-8. Other
+For important vulnerability decisions, verify the information against authoritative sources, including the [official CISA KEV catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog).
 
-The first matching category in the configured category order determines the result. Ambiguous headlines may be misclassified.
+### 4.3 Slack Integration
 
-## 7. Priority Assignment
+The application posts its news digest to a configured Slack channel.
 
-The `prioritize_story(story)` function assigns one of three priority levels:
-
-- HIGH
-- MEDIUM
-- LOW
-
-Configured headline keywords determine the assigned level. HIGH and MEDIUM indicators are checked according to the application's implemented matching rules; stories that do not meet those rules receive the default priority.
-
-These labels help organize the digest. They do not establish the real-world severity or exploitability of a vulnerability.
-
-## 8. Slack Integration
-
-The application sends the formatted digest through Slack's Web API.
-
-It requires the following environment variables:
+The GitHub Actions workflow passes credentials through repository secrets:
 
 - `SLACK_BOT_TOKEN`
 - `SLACK_CHANNEL_ID`
 
-The GitHub Actions workflow supplies these values through repository secrets.
+These values must not be hardcoded into Python files, documentation, tests, or workflow YAML.
 
-The Slack bot needs permission to post messages to the destination channel. The application checks the API response and handles delivery errors.
+Successful delivery depends on valid credentials, the Slack bot's permissions, network connectivity, and Slack service availability.
 
-Never hardcode or commit actual credentials.
+## 5. GitHub Actions
 
-## 9. GitHub Actions Workflow
-
-The workflow is located at:
+The main workflow is:
 
 `.github/workflows/cybersecurity-news.yml`
 
-### Schedule
+It supports scheduled execution, manual execution, and pull-request validation.
+
+### 5.1 Scheduled Execution
+
+The configured schedule is:
 
 ```yaml
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "30 3 * * *"
+schedule:
+  - cron: "30 3 * * *"
 ```
 
-The cron expression runs daily at 03:30 UTC, equivalent to 09:00 Sri Lanka time.
+This represents 03:30 UTC daily, equivalent to 09:00 in Sri Lanka Standard Time (UTC+05:30).
 
-Manual execution is available through the GitHub Actions interface.
+GitHub Actions may delay scheduled workflow starts, so the digest is not guaranteed to arrive at the exact scheduled minute.
 
-### Workflow Steps
+### 5.2 Manual Execution
 
-1. Check out the repository.
-2. Set up Python 3.12.
-3. Install dependencies from `requirements.txt`, when present.
-4. Run unit tests using `unittest`.
-5. Install Bandit.
-6. Scan `news_bot.py` with Bandit.
-7. Run the bot and attempt Slack delivery unless the workflow has been cancelled.
-8. Summarize test and scan outcomes.
-9. Mark the workflow as failed if the test suite or Bandit step fails.
+The workflow supports `workflow_dispatch`, allowing an authorized repository user to start a run from the GitHub Actions interface.
 
-The test and security-scan steps use `continue-on-error: true`, allowing subsequent steps to run. Their outcomes are evaluated at the end so failures remain visible in the overall workflow status.
+A manual run can post to the configured Slack channel. Confirm that the intended branch and configuration are selected before running it.
 
-## 10. Dependencies and Testing
+### 5.3 Pull-Request Validation
 
-The project dependency is documented in `requirements.txt`:
+The main workflow also runs for pull requests targeting `main`.
 
-```text
-defusedxml>=0.7.1,<1.0
-```
+The Slack-posting step is skipped for pull-request events so that validation does not intentionally send production messages to the Slack channel.
 
-The tests are located at:
+Review workflow permissions and changes to workflow files before merging.
 
-`tests/test_news_bot.py`
+### 5.4 Quality Checks
 
-Run the suite locally with:
+The main workflow runs:
+
+- Python unit tests
+- Bandit security scanning
+
+The tests and Bandit steps use `continue-on-error: true`, followed by a final step that fails the workflow if either check fails.
+
+As a result, a Slack post may succeed even when a quality check fails. Always inspect the overall workflow result and the individual step outcomes.
+
+## 6. Testing
+
+The test directory is:
+
+`tests/`
+
+The test suite includes checks for the strict title-only KEV matching behavior.
+
+Run the tests in an appropriate Python environment using:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-Bandit is installed by the workflow and scans `news_bot.py` using:
+The tests help detect regressions but cannot prove that every application behavior is correct.
+
+## 7. Security Controls
+
+### 7.1 Bandit
+
+Bandit checks Python code for selected security-related coding patterns.
+
+Configured command:
 
 ```bash
 python -m bandit -r news_bot.py -ll
 ```
 
-Review scan findings individually. A warning is not automatically proof of an exploitable issue, and a clean scan does not guarantee complete security.
+Review findings rather than assuming that a clean scan proves the application is secure.
 
-## 11. Security Considerations
+### 7.2 Gitleaks
 
-- Keep Slack credentials in GitHub Actions secrets.
-- Use HTTPS for external requests.
-- Parse RSS XML using `defusedxml`.
-- Review dependency and workflow updates.
-- Inspect failed test and security-scan logs.
-- Give the Slack bot only the required permissions.
+The repository includes a Gitleaks workflow intended to identify patterns that may indicate exposed secrets.
 
-See `SECURITY.md` for the project's security policy.
+A scan can produce false positives or miss some secrets. If a real credential is exposed, revoke or rotate it promptly.
 
-## 12. Limitations
+### 7.3 CodeQL
 
-- Duplicate filtering does not persist across executions.
-- Categorization and priority scoring rely on headline keywords.
-- Feed formats and availability can vary.
-- Headlines are not a substitute for full article or vulnerability analysis.
-- Slack delivery depends on credentials, permissions, network connectivity, and API availability.
-- Automated tests and security scans cannot guarantee defect-free or secure software.
+The repository includes CodeQL analysis for supported code, subject to the current workflow configuration and successful execution.
 
-## 13. Potential Improvements
+Review any reported findings and address them where appropriate.
 
-- Persistent duplicate detection.
-- Better publication-date handling and URL normalization.
-- More precise categorization and priority scoring.
-- Additional trusted news sources.
-- Expanded unit and integration tests.
-- Improved monitoring of feed failures and Slack delivery.
+### 7.4 Repository Protection
 
----
+The `main` branch should be protected with pull-request requirements and appropriate restrictions on force pushes.
 
-Last updated: October 2026
+Where practical, require relevant status checks before merging. Verify the active rules in the repository settings.
+
+### 7.5 Least Privilege
+
+GitHub Actions workflows should receive only the permissions they need.
+
+Third-party actions should be reviewed and pinned to verified versions or full commit SHAs where practical. Changes that introduce new permissions or expose secrets require careful review.
+
+## 8. Repository Structure
+
+The main project files are expected to follow this general structure:
+
+```text
+cybersecurity-news-automation/
+├── .github/
+│   └── workflows/
+│       ├── cybersecurity-news.yml
+│       ├── gitleaks.yml
+│       └── CodeQL workflow
+├── docs/
+│   ├── ARCHITECTURE.md
+│   └── DEVELOPMENT-LOG.md
+├── tests/
+│   └── test_news_bot.py
+├── news_bot.py
+├── requirements.txt
+├── README.md
+├── CONTRIBUTING.md
+└── SECURITY.md
+```
+
+This is a documentation reference structure. Confirm the actual filenames in GitHub before relying on every listed path.
+
+## 9. Error Handling and Limitations
+
+Potential failure points include:
+
+- External feeds being unavailable or changing format.
+- Network errors or timeouts.
+- Missing or malformed article fields.
+- Invalid Slack credentials or insufficient Slack permissions.
+- Slack rate limits or service outages.
+- Failed unit tests or security scans.
+- Delayed scheduled workflow execution.
+
+The application should handle external failures safely and avoid logging sensitive credentials.
+
+A successful workflow step or Slack post does not guarantee that all articles are complete, accurate, or relevant.
+
+## 10. Maintenance and Future Improvements
+
+Potential improvements include:
+
+- More comprehensive tests for malformed feed content.
+- Better reporting of individual feed failures.
+- Retry and timeout handling where appropriate.
+- Additional tests for Slack API failures.
+- Ongoing dependency and GitHub Actions maintenance.
+- Clearer operational logging that excludes secrets.
+- More detailed monitoring of workflow failures.
+
+Document an improvement as implemented only after the corresponding code or configuration has been changed and verified.
+
+## 11. Related Documentation
+
+- `README.md` — project overview and setup instructions.
+- `CONTRIBUTING.md` — contribution guidelines.
+- `SECURITY.md` — vulnerability reporting and security practices.
+- `docs/DEVELOPMENT-LOG.md` — development history and milestones.
+
+## 12. Summary
+
+The system combines Python-based news processing, GitHub Actions automation, Slack delivery, automated tests, and security scanning.
+
+Its reliability depends on the implementation, external services, credential security, workflow configuration, and regular maintenance. Automated checks help reduce risk but do not guarantee that the application is free from bugs or security vulnerabilities.
