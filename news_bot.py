@@ -1,12 +1,18 @@
+
 import os
 import re
 import html
 import json
 import urllib.request
 import urllib.error
-import xml.etree.ElementTree as ET
+from urllib.parse import urlparse
+from defusedxml import ElementTree as ET
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+
+
+TIMEOUT_SECONDS = 20
+MAX_STORIES = 10
 
 FEEDS = [
     ("The Hacker News", "https://feeds.feedburner.com/TheHackersNews"),
@@ -14,17 +20,119 @@ FEEDS = [
     ("Krebs on Security", "https://krebsonsecurity.com/feed/"),
 ]
 
-MAX_STORIES = 10
-TIMEOUT_SECONDS = 20
+HIGH_PRIORITY_KEYWORDS = [
+    "critical vulnerability",
+    "zero-day",
+    "zero day",
+    "actively exploited",
+    "remote code execution",
+    "rce",
+    "ransomware",
+    "data breach",
+    "credential theft",
+    "privilege escalation",
+]
+
+MEDIUM_PRIORITY_KEYWORDS = [
+    "vulnerability",
+    "exploit",
+    "malware",
+    "phishing",
+    "cyberattack",
+    "cyber attack",
+    "security flaw",
+    "patch",
+    "backdoor",
+    "botnet",
+]
+
+SOC_KEYWORDS = [
+    "threat intelligence",
+    "incident response",
+    "security operations",
+    "soc",
+    "siem",
+    "detection",
+    "indicators of compromise",
+    "ioc",
+    "intrusion",
+    "malware",
+    "ransomware",
+    "phishing",
+    "exploit",
+    "vulnerability",
+    "data breach",
+    "cyberattack",
+    "cyber attack",
+    "zero-day",
+    "zero day",
+]
+
+
+def clean_text(value):
+    """Decode HTML entities and remove markup from feed text."""
+    if not value:
+        return ""
+
+    value = html.unescape(value)
+    value = re.sub(r"<[^>]+>", " ", value)
+    return " ".join(value.split())
+
+
+def parse_date(value):
+    """Parse a published date and return a UTC datetime."""
+    if not value:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    try:
+        parsed = parsedate_to_datetime(value)
+
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+
+        return parsed.astimezone(timezone.utc)
+
+    except (TypeError, ValueError, OverflowError):
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def prioritize_story(story):
+    """Assign a priority score based on security keywords."""
+    text = f"{story['title']} {story['summary']}".lower()
+
+    if any(keyword in text for keyword in HIGH_PRIORITY_KEYWORDS):
+        return 3
+
+    if any(keyword in text for keyword in MEDIUM_PRIORITY_KEYWORDS):
+        return 2
+
+    return 1
+
+
+def is_soc_relevant(story):
+    """Return True when a story is relevant to SOC work."""
+    text = f"{story['title']} {story['summary']}".lower()
+    return any(keyword in text for keyword in SOC_KEYWORDS)
 
 
 def fetch_feed(source, url):
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": "CybersecurityNewsBot/1.0"},
-    )
-
+    """Fetch and parse an RSS feed from a validated HTTPS URL."""
     try:
+        parsed_url = urlparse(url)
+
+        if (
+            parsed_url.scheme != "https"
+            or not parsed_url.hostname
+            or parsed_url.username
+            or parsed_url.password
+        ):
+            raise ValueError("Only valid HTTPS feed URLs are allowed.")
+
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "CybersecurityNewsBot/1.0"},
+        )
+
         with urllib.request.urlopen(
             request, timeout=TIMEOUT_SECONDS
         ) as response:
@@ -34,28 +142,35 @@ def fetch_feed(source, url):
         stories = []
 
         for item in root.findall(".//item"):
-            title = item.findtext("title", default="").strip()
-            link = item.findtext("link", default="").strip()
-            pub_date = item.findtext("pubDate", default="").strip()
+            title = clean_text(item.findtext("title", ""))
+            link = item.findtext("link", "").strip()
+            summary = clean_text(
+                item.findtext("description", "")
+            )
+            published = item.findtext("pubDate", "")
 
             if not title or not link:
                 continue
 
-            published = None
-            if pub_date:
-                try:
-                    published = parsedate_to_datetime(pub_date)
-                    if published.tzinfo is None:
-                        published = published.replace(tzinfo=timezone.utc)
-                except (TypeError, ValueError, OverflowError):
-                    published = None
+            link_url = urlparse(link)
 
-            stories.append({
-                "source": source,
-                "title": html.unescape(re.sub(r"<[^>]+>", "", title)),
-                "link": link,
-                "published": published,
-            })
+            if (
+                link_url.scheme != "https"
+                or not link_url.hostname
+                or link_url.username
+                or link_url.password
+            ):
+                continue
+
+            stories.append(
+                {
+                    "source": source,
+                    "title": title,
+                    "link": link,
+                    "summary": summary,
+                    "published": parse_date(published),
+                }
+            )
 
         print(f"Fetched {len(stories)} stories from {source}")
         return stories
@@ -65,173 +180,100 @@ def fetch_feed(source, url):
         return []
 
 
-
-def categorize_story(story):
-    text = story["title"].lower()
-
-    categories = {
-        "🚨 Vulnerability": [
-            "cve-", "zero-day", "zero day", "vulnerability",
-            "security flaw", "patch", "exploit", "mfa bypass",
-            "bypass mfa", "remote code execution", "rce",
-            "privilege escalation"
-        ],
-        "🦠 Malware & Ransomware": [
-            "ransomware", "malware", "trojan", "rootkit",
-            "botnet", "wiper malware", "backdoor"
-        ],
-        "🕵️ Spyware & Surveillance": [
-            "spyware", "pegasus", "surveillanceware",
-            "stalkerware", "mercenary spyware"
-        ],
-        "🔓 Data Breach": [
-            "data breach", "data leak", "leaked data",
-            "stolen data", "exposed database", "exposed records",
-            "credential theft", "credentials stolen",
-            "information theft"
-        ],
-        "🔐 Certificate & Trust Infrastructure": [
-            "certificate authority", "ca keys", "certificate keys",
-            "signing certificate", "code-signing certificate",
-            "compromised certificate", "fraudulent certificate",
-            "certificate revocation", "root certificate",
-            "trust infrastructure"
-        ],
-        "🎯 Threat Intelligence": [
-            "apt", "threat actor", "phishing campaign",
-            "indicators of compromise", "ioc", "cyber espionage",
-            "threat campaign", "nation-state hackers"
-        ],
-        "🛡️ Cyberattacks & Intrusions": [
-            "cyberattack", "cyber attack", "hackers use",
-            "breach company websites", "unauthorized access",
-            "websites compromised", "systems compromised",
-            "intrusion", "hacked", "keys compromised",
-            "account takeover"
-        ],
-    }
-
-    for category, keywords in categories.items():
-        if any(keyword in text for keyword in keywords):
-            return category
-
-    return "📰 Other"
-
-def prioritize_story(story):
-    text = story["title"].lower()
-
-    high_priority = [
-        "zero-day", "zero day",
-        "actively exploited", "exploited in attacks",
-        "remote code execution", "unauthenticated rce",
-        "ransomware", "bypass mfa", "mfa bypass",
-        "actively targeted", "critical vulnerability",
-        "mass exploitation", "systems compromised",
-        "spyware infection", "company websites","ca keys compromised",
-        "certificate authority",
-        "signing certificate compromised",
-        "fraudulent certificate",
-        "trust infrastructure",
-    ]
-
-    medium_priority = [
-        "vulnerability", "security flaw", "data breach",
-        "data leak", "phishing", "malware",
-        "exploit", "credential theft", "spyware",
-        "cyberattack", "cyber attack", "hacked",
-        "stolen data", "account takeover",
-        "security patch", "privilege escalation"
-    ]
-
-    if any(keyword in text for keyword in high_priority):
-        return "🔴 HIGH"
-
-    if any(keyword in text for keyword in medium_priority):
-        return "🟡 MEDIUM"
-
-    return "🟢 LOW"
-
-
-def is_soc_relevant(story):
-    text = story["title"].lower()
-
-    soc_keywords = [
-        "vulnerability", "cve-", "zero-day", "zero day",
-        "exploit", "actively exploited", "remote code execution",
-        "ransomware", "malware", "trojan", "botnet",
-        "spyware", "pegasus", "phishing",
-        "data breach", "data leak", "stolen data",
-        "credential theft", "account takeover",
-        "cyberattack", "cyber attack", "hacked",
-        "hackers", "compromised", "unauthorized access",
-        "intrusion", "threat actor", "apt",
-        "cyber espionage", "indicators of compromise",
-        "certificate authority", "ca keys",
-        "security flaw", "privilege escalation",
-        "security patch", "security advisory",
-        "incident response", "security incident"
-    ]
-
-    return any(keyword in text for keyword in soc_keywords)
-
+def escape_slack_text(value):
+    """Escape Slack's special characters in plain text."""
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
 
 
 def build_digest(stories):
-    now = datetime.now(timezone.utc)
+    """Build a Slack digest with SOC-relevant stories first."""
+    if not stories:
+        return "No cybersecurity news stories were available today."
+
+    ordered_stories = sorted(
+        stories,
+        key=lambda story: (
+            is_soc_relevant(story),
+            prioritize_story(story),
+            story["published"],
+        ),
+        reverse=True,
+    )
+
+    selected_stories = ordered_stories[:MAX_STORIES]
+
     lines = [
-        ":newspaper: *Daily Cybersecurity News*",
-        f"_Generated {now.strftime('%Y-%m-%d %H:%M UTC')}_",
+        "*Daily Cybersecurity News Digest*",
+        f"_{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}_",
         "",
     ]
 
-    if not stories:
-        lines.append("No stories could be retrieved today.")
-        return "\n".join(lines)
-
-    # Put SOC-relevant stories first; retain all other stories afterward.
-    ordered_stories = sorted(
-        stories,
-        key=lambda story: not is_soc_relevant(story)
-    )
-
-    for number, story in enumerate(ordered_stories, start=1):
-        title = (
-            story["title"]
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-        source = story["source"]
-        link = story["link"]
-
-        category = categorize_story(story)
+    for index, story in enumerate(selected_stories, start=1):
         priority = prioritize_story(story)
 
-        lines.append(f"*{number}. <{link}|{title}>*")
-        lines.append(f"{priority} · {category} · _{source}_")
+        if priority == 3:
+            category = "🚨 High Priority"
+        elif priority == 2:
+            category = "⚠️ Medium Priority"
+        else:
+            category = "📰 General"
+
+        title = escape_slack_text(story["title"])
+        source = escape_slack_text(story["source"])
+        link = story["link"]
+
+        lines.append(
+            f"{index}. *<{link}|{title}>*\n"
+            f"   {category} | {source}"
+        )
+
+        if story["summary"]:
+            summary = escape_slack_text(story["summary"])
+            if len(summary) > 250:
+                summary = summary[:247] + "..."
+
+            lines.append(f"   _{summary}_")
+
         lines.append("")
 
-    lines.append(f"_Total stories: {len(ordered_stories)}_")
     return "\n".join(lines)
 
 
 def post_to_slack(message):
+    """Post the digest to Slack using credentials from environment secrets."""
     token = os.environ.get("SLACK_BOT_TOKEN")
     channel = os.environ.get("SLACK_CHANNEL_ID")
 
     if not token or not channel:
         raise RuntimeError(
-            "Missing SLACK_BOT_TOKEN or SLACK_CHANNEL_ID environment secret."
+            "Missing SLACK_BOT_TOKEN or SLACK_CHANNEL_ID environment variable."
         )
 
-    payload = json.dumps({
-        "channel": channel,
-        "text": message,
-        "unfurl_links": False,
-    }).encode("utf-8")
+    slack_url = "https://slack.com/api/chat.postMessage"
+    parsed_url = urlparse(slack_url)
+
+    if (
+        parsed_url.scheme != "https"
+        or parsed_url.hostname != "slack.com"
+    ):
+        raise RuntimeError("Invalid Slack API URL.")
+
+    payload = json.dumps(
+        {
+            "channel": channel,
+            "text": message,
+            "mrkdwn": True,
+            "unfurl_links": False,
+            "unfurl_media": False,
+        }
+    ).encode("utf-8")
 
     request = urllib.request.Request(
-        "https://slack.com/api/chat.postMessage",
+        slack_url,
         data=payload,
         headers={
             "Authorization": f"Bearer {token}",
@@ -245,59 +287,40 @@ def post_to_slack(message):
             request, timeout=TIMEOUT_SECONDS
         ) as response:
             result = json.loads(response.read().decode("utf-8"))
+
     except urllib.error.HTTPError as error:
         raise RuntimeError(
             f"Slack API returned HTTP {error.code}."
         ) from error
 
     if not result.get("ok"):
-        error_code = result.get("error", "unknown_error")
-        raise RuntimeError(f"Slack rejected the message: {error_code}")
+        raise RuntimeError(
+            f"Slack API error: {result.get('error', 'unknown_error')}"
+        )
 
-    print("Successfully posted the cybersecurity digest to Slack.")
+    print("Cybersecurity news digest posted to Slack successfully.")
 
 
 def main():
-    print("CYBERSECURITY DAILY NEWS")
-    print(f"Generated: {datetime.now(timezone.utc).isoformat()}")
-    print("=" * 50)
-
+    """Fetch feeds, deduplicate stories, and post the daily digest."""
     all_stories = []
+    seen_links = set()
+
     for source, url in FEEDS:
-        all_stories.extend(fetch_feed(source, url))
+        stories = fetch_feed(source, url)
+
+        for story in stories:
+            if story["link"] not in seen_links:
+                seen_links.add(story["link"])
+                all_stories.append(story)
 
     all_stories.sort(
-        key=lambda story: story["published"] or datetime.min.replace(
-            tzinfo=timezone.utc
-        ),
+        key=lambda story: story["published"],
         reverse=True,
     )
 
-    unique_stories = []
-    seen_links = set()
-
-    for story in all_stories:
-        if story["link"] in seen_links:
-            continue
-        seen_links.add(story["link"])
-        unique_stories.append(story)
-
-    selected = unique_stories[:MAX_STORIES]
-
-    for number, story in enumerate(selected, start=1):
-        published = story["published"]
-        date_text = (
-            published.strftime("%Y-%m-%d %H:%M UTC")
-            if published else "Date unavailable"
-        )
-        print(f"{number}. {story['title']}")
-        print(f"   Source: {story['source']} | Published: {date_text}")
-        print(f"   Link: {story['link']}")
-
-    digest = build_digest(selected)
+    digest = build_digest(all_stories)
     post_to_slack(digest)
-
-    print(f"Total stories: {len(selected)}")
 
 
 if __name__ == "__main__":
