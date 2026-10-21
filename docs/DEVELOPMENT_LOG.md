@@ -1,168 +1,126 @@
 # Development Log
 
-## Project: Cybersecurity News Automation
+## Project
 
-A Python-based automation project that collects cybersecurity news from RSS feeds, categorizes and prioritizes stories, highlights SOC-relevant headlines, and sends a daily digest to Slack using GitHub Actions.
+**Name:** Cybersecurity News Automation Bot
 
-## Current Status
+**Repository:** https://github.com/RavinduFX/cybersecurity-news-automation
 
-- Daily GitHub Actions schedule configured for 09:00 Sri Lanka time.
-- Manual workflow execution supported.
-- Slack digest delivery confirmed by the project maintainer.
-- The latest reported automated test run completed successfully.
-- Bandit security scanning included in the workflow.
-- Repository documentation includes `README.md`, `SECURITY.md`, and project documentation under `docs/`.
+**Default branch:** `main`
 
-## Completed Development
+## Purpose
 
-### 1. RSS Feed Integration
+This project automates the collection of cybersecurity news and delivers a digest to a configured Slack channel using GitHub Actions.
 
-Configured the following news sources:
+This log records significant project changes, testing milestones, maintenance work, and known limitations.
 
-- The Hacker News
-- BleepingComputer
-- Krebs on Security
+## Development History
 
-The bot handles feed retrieval and parsing errors so that an individual feed failure can be handled without necessarily preventing processing of the remaining sources.
+### Milestone 1 — Initial Automation
 
-### 2. Article Processing
+**Status:** Implemented
 
-Implemented article extraction and processing for:
+- Established the cybersecurity news automation project.
+- Configured news collection from The Hacker News, BleepingComputer, and Krebs on Security.
+- Configured Slack delivery using GitHub Actions secrets.
+- Added scheduled and manual workflow execution.
 
-- Article title
-- Article URL
-- News source
-- Publication date, when available
+### Milestone 2 — Automated Testing
 
-Additional processing includes publication-date sorting, duplicate URL filtering within a single execution, and a maximum digest size of 10 stories.
+**Status:** Implemented; verify against the latest workflow run
 
-### 3. Cybersecurity Categorization
+- Added automated Python unit tests under `tests/`.
+- Configured GitHub Actions to run the test suite.
+- Added test execution results to the workflow logs.
 
-Implemented keyword-based categorization for:
+**Verification:** Check the latest GitHub Actions run to confirm the current test status.
 
-- Vulnerability
-- Malware & Ransomware
-- Spyware & Surveillance
-- Data Breach
-- Certificate & Trust Infrastructure
-- Threat Intelligence
-- Cyberattacks & Intrusions
-- Other
+### Milestone 3 — Python Security Scanning
 
-Category assignment depends on the configured keywords and matching order.
+**Status:** Configured; verify against the latest workflow run
 
-### 4. Priority Assignment
+- Added Bandit scanning for `news_bot.py`.
+- Configured the workflow to report test and security-scan outcomes.
+- Added a final workflow step that fails the run if the tests or Bandit scan fail.
 
-Implemented HIGH, MEDIUM, and LOW priority levels based on configurable headline keywords.
+A successful Slack post does not necessarily mean all quality checks passed.
 
-Priority indicators include security vulnerabilities, exploitation, ransomware, remote code execution, and other security-related terms.
+### Milestone 4 — Repository Security
 
-Priority labels are heuristic indicators and do not represent a complete technical risk assessment.
+**Status:** Configured; verify the current repository settings
 
-### 5. SOC-Relevant Story Prioritization
+- Added a Gitleaks workflow for secret scanning.
+- Configured CodeQL analysis.
+- Established branch protection rules for `main`.
 
-Implemented `is_soc_relevant(story)` to identify headlines that may be relevant to security monitoring, investigation, and incident response.
+Review the repository's current workflow files and branch rules to confirm which protections are active.
 
-The digest prioritizes SOC-relevant stories while retaining other selected stories.
+### Milestone 5 — Strict CISA KEV Detection
 
-### 6. Slack Integration
+**Status:** Implemented; verify with automated tests
 
-Integrated Slack message delivery using the Slack Web API.
+- Defined title-only matching for CISA Known Exploited Vulnerabilities (KEV).
+- Added tests for CVE matches in titles.
+- Added tests to ensure summary-only matches do not trigger a KEV label.
+- Added tests for CVEs absent from the catalog and empty catalogs.
 
-The integration uses these environment variables:
+**Expected behavior:** A story is marked as a KEV match only when a CVE identifier in its title matches an identifier in the configured KEV catalog.
 
-- `SLACK_BOT_TOKEN`
-- `SLACK_CHANNEL_ID`
+This rule can miss relevant vulnerabilities when their titles omit CVE identifiers. A match does not prove that a particular system is affected.
 
-The bot formats the digest with article links, source information, categories, and priority indicators. API responses and delivery errors are handled by the application.
+### Milestone 6 — Documentation
 
-Credentials are supplied through GitHub Actions repository secrets.
+**Status:** In progress
 
-### 7. GitHub Actions Automation
+Documentation includes or is planned to include:
 
-Implemented the workflow:
+- `README.md` — project overview and setup instructions
+- `CONTRIBUTING.md` — contribution guidelines
+- `SECURITY.md` — security policy
+- `docs/DEVELOPMENT-LOG.md` — development history
+- `docs/ARCHITECTURE.md` — system design and data flow
 
-`.github/workflows/cybersecurity-news.yml`
+Update this section when documentation changes have been committed.
 
-The workflow:
+## Current Workflow
 
-- Checks out the repository.
-- Sets up Python 3.12.
-- Installs dependencies from `requirements.txt`, when present.
-- Runs automated unit tests.
-- Installs and runs Bandit security scanning.
-- Executes the news bot to deliver the Slack digest.
-- Summarizes the results of tests and security scanning.
-- Marks the workflow as failed if the tests or Bandit scan fail.
-- Supports manual execution through `workflow_dispatch`.
+The scheduled workflow is configured with:
 
-The schedule uses `30 3 * * *`, corresponding to 03:30 UTC or 09:00 Sri Lanka time.
+`30 3 * * *`
 
-### 8. Automated Testing
+This corresponds to 03:30 UTC, or 09:00 in Sri Lanka Standard Time (UTC+05:30).
 
-Unit tests are maintained in:
+GitHub Actions scheduling is not guaranteed to start at the exact minute.
 
-`tests/test_news_bot.py`
-
-The test suite covers story categorization, priority assignment, certificate authority compromise, SOC relevance, and other headline-processing behavior.
-
-Tests use Python's built-in `unittest` framework.
-
-Run the tests locally with:
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-The latest reported test run passed. Check GitHub Actions for the current result rather than assuming every future run will pass.
-
-### 9. Security Improvements
-
-Security-related practices include:
-
-- Parsing RSS XML with `defusedxml`.
-- Using HTTPS for external requests.
-- Keeping Slack credentials in GitHub Actions secrets.
-- Running Bandit against `news_bot.py`.
-- Avoiding hardcoded credentials in source code.
-- Documenting security practices in `SECURITY.md`.
-
-Security scans and automated tests help identify problems but cannot guarantee that the application is completely secure.
-
-### 10. Documentation
-
-Project documentation includes:
-
-- `README.md` — overview, setup, configuration, and troubleshooting.
-- `SECURITY.md` — security practices and vulnerability reporting.
-- `docs/DEVELOPMENT_LOG.md` — development history and completed work.
-- `docs/PROJECT_ARCHITECTURE.md` — application components and execution flow.
+The workflow also supports manual execution and pull-request checks. Pull-request runs are configured to skip production Slack posting.
 
 ## Known Limitations
 
-- Duplicate filtering is limited to a single execution; stories may reappear on later days.
-- Categorization and priority assignment depend on headline keywords.
-- The bot does not independently verify vulnerabilities or perform a complete analysis of every article.
-- RSS feed availability, network problems, and Slack API errors can affect delivery.
-- A successful workflow run does not guarantee that every news story is classified correctly.
+- News availability and quality depend on external feeds.
+- External feeds can be unavailable, malformed, delayed, or changed.
+- Scheduled execution can be delayed by GitHub Actions.
+- Slack delivery depends on valid credentials, permissions, and network availability.
+- Automated tests and security scanners cannot guarantee the absence of bugs or vulnerabilities.
+- Title-only KEV matching can miss CVEs that do not appear in article titles.
+- A successful notification does not independently verify the accuracy of every article.
 
-## Potential Future Improvements
+## Maintenance Checklist
 
-1. Add persistent duplicate filtering across executions.
-2. Expand tests for RSS parsing, error handling, and Slack message formatting.
-3. Improve categorization and priority accuracy.
-4. Add additional trusted cybersecurity news sources.
-5. Improve visibility into feed failures and delivery problems.
-6. Review dependency and GitHub Actions updates regularly.
+- [ ] Review recent GitHub Actions results.
+- [ ] Investigate failed tests and security scans.
+- [ ] Review dependency and workflow updates.
+- [ ] Confirm Slack secrets remain valid and are not exposed.
+- [ ] Update documentation when application behavior changes.
+- [ ] Record significant changes in this log.
 
-## Maintenance Notes
+## How to Update This Log
 
-- Keep credentials in GitHub Actions secrets.
-- Review failed workflow runs and Bandit findings.
-- Run the test suite after changing application logic.
-- Keep documentation aligned with actual code and workflow behavior.
-- Verify future scheduled runs and Slack delivery.
+Add a dated entry for significant changes. Include:
 
----
+- Date
+- Change made
+- Reason for the change
+- Tests or security checks performed
+- Outcome and any known limitations
 
-Last updated: October 2026
+Do not record secret values, private credentials, or sensitive incident details in this document.
