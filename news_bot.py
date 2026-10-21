@@ -262,11 +262,29 @@ def story_cves(story, summary=""):
     }
 
 
+
 def is_known_exploited(story, kev_cves=None, summary=""):
-    """Return True if the story mentions a CVE present in the CISA KEV set."""
+    """Return True only if a CVE in the story title is in CISA KEV."""
     if not kev_cves:
         return False
-    return bool(story_cves(story, summary) & {cve.upper() for cve in kev_cves})
+
+    if isinstance(story, dict):
+        title = story.get("title", "")
+    else:
+        title = str(story)
+
+    title_cves = {
+        cve.upper()
+        for cve in CVE_PATTERN.findall(title)
+    }
+
+    catalog_cves = {
+        cve.upper()
+        for cve in kev_cves
+    }
+
+    return bool(title_cves & catalog_cves)
+
 
 
 def fetch_feed(source, url):
