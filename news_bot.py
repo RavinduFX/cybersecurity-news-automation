@@ -1,4 +1,3 @@
-
 import os
 import re
 import html
@@ -20,64 +19,65 @@ FEEDS = [
     ("Krebs on Security", "https://krebsonsecurity.com/feed/"),
 ]
 
-# Use an HTTPS handler for outbound HTTP requests.
-HTTPS_OPENER = urllib.request.build_opener(
-    urllib.request.HTTPSHandler()
-)
-
 CATEGORY_KEYWORDS = {
     "🦠 Malware & Ransomware": [
-        "ransomware",
-        "malware",
-        "infostealer",
-        "information stealer",
-        "trojan",
-        "backdoor",
-        "botnet",
-        "credential stealer",
+        "ransomware", "malware", "infostealer",
+        "information stealer", "trojan", "backdoor",
+        "botnet", "credential stealer",
     ],
     "🕵️ Spyware & Surveillance": [
-        "spyware",
-        "surveillance",
-        "stalkerware",
-        "keylogger",
+        "spyware", "surveillance", "stalkerware", "keylogger",
     ],
     "🔓 Data Breach": [
-        "data breach",
-        "data leak",
-        "exposed records",
-        "stolen data",
-        "personal information exposed",
+        "data breach", "data leak", "exposed records",
+        "stolen data", "personal information exposed",
     ],
     "🔐 Certificate & Trust Infrastructure": [
         "certificate authority compromise",
         "certificate authority",
+        "certificate authorities",
         "ca compromise",
+        "compromised ca",
+        "compromised certificate authority",
         "trust infrastructure",
         "code signing certificate",
         "digital certificate",
         "certificate revocation",
         "tls certificate",
         "ssl certificate",
+        "root certificate",
+        "root ca",
+        "certificate issuer",
+        "certificate issuance",
+        "public key infrastructure",
+        "pki",
     ],
     "🎯 Threat Intelligence": [
-        "threat intelligence",
-        "threat actor",
-        "indicators of compromise",
-        "ioc",
-        "apt group",
-        "cyber espionage",
+        "threat intelligence", "threat actor",
+        "indicators of compromise", "ioc",
+        "apt group", "cyber espionage",
     ],
     "🛡️ Cyberattacks & Intrusions": [
         "cyberattack campaign",
         "cyberattack",
+        "cyber attacks",
         "cyber attack",
+        "cybercriminal attack",
+        "cyber crime",
+        "cybercrime",
         "unauthorized access",
         "hacking",
         "intrusion",
         "phishing",
         "account takeover",
         "security breach",
+        "network attack",
+        "computer attack",
+        "systems compromised",
+        "system compromised",
+        "attacker gained access",
+        "attack campaign",
+        "breached network",
     ],
     "🚨 Vulnerability": [
         "critical vulnerability",
@@ -142,11 +142,13 @@ SOC_KEYWORDS = [
     "cyber attack",
     "zero-day",
     "zero day",
+    "certificate authority",
+    "unauthorized access",
 ]
 
 
 def clean_text(value):
-    """Decode HTML entities and remove markup from feed text."""
+    """Decode HTML entities and remove markup."""
     if not value:
         return ""
 
@@ -156,7 +158,7 @@ def clean_text(value):
 
 
 def parse_date(value):
-    """Parse a published date and normalize it to UTC."""
+    """Parse a publication date and normalize it to UTC."""
     if not value:
         return datetime.min.replace(tzinfo=timezone.utc)
 
@@ -173,18 +175,17 @@ def parse_date(value):
 
 
 def story_text(story, summary=""):
-    """Get searchable text from a story dictionary or title."""
+    """Support both story dictionaries and plain-text inputs."""
     if isinstance(story, dict):
-        return (
-            f"{story.get('title', '')} "
-            f"{story.get('summary', '')}"
-        ).lower()
+        title = story.get("title", "")
+        description = story.get("summary", "")
+        return f"{title} {description} {summary}".lower()
 
     return f"{story} {summary}".lower()
 
 
 def categorize_story(story, summary=""):
-    """Assign a cybersecurity category based on keywords."""
+    """Categorize a story using title and summary keywords."""
     text = story_text(story, summary)
 
     for category, keywords in CATEGORY_KEYWORDS.items():
@@ -195,7 +196,7 @@ def categorize_story(story, summary=""):
 
 
 def prioritize_story(story, summary=""):
-    """Return the priority label expected by the test suite."""
+    """Return a human-readable priority label."""
     text = story_text(story, summary)
 
     if any(keyword in text for keyword in HIGH_PRIORITY_KEYWORDS):
@@ -208,17 +209,17 @@ def prioritize_story(story, summary=""):
 
 
 def is_soc_relevant(story, summary=""):
-    """Identify stories relevant to security operations."""
+    """Check whether a story is relevant to security operations."""
     text = story_text(story, summary)
     return any(keyword in text for keyword in SOC_KEYWORDS)
 
 
 def validate_https_url(url, allowed_hosts=None):
-    """Reject non-HTTPS URLs and optionally restrict hostnames."""
+    """Require HTTPS and optionally restrict hostnames."""
     parsed = urlparse(url)
 
     if (
-        parsed.scheme != "https"
+        parsed.scheme.lower() != "https"
         or not parsed.hostname
         or parsed.username
         or parsed.password
@@ -226,14 +227,35 @@ def validate_https_url(url, allowed_hosts=None):
         raise ValueError("Only valid HTTPS URLs are allowed.")
 
     if allowed_hosts is not None:
-        if parsed.hostname.lower() not in allowed_hosts:
+        allowed = {host.lower() for host in allowed_hosts}
+
+        if parsed.hostname.lower() not in allowed:
             raise ValueError("URL hostname is not allowed.")
 
     return parsed
 
 
+class HTTPSOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject redirects to non-HTTPS URLs."""
+
+    def redirect_request(
+        self, request, response, code, message, headers, new_url
+    ):
+        validate_https_url(new_url)
+
+        return super().redirect_request(
+            request, response, code, message, headers, new_url
+        )
+
+
+HTTPS_OPENER = urllib.request.build_opener(
+    urllib.request.HTTPSHandler(),
+    HTTPSOnlyRedirectHandler(),
+)
+
+
 def fetch_feed(source, url):
-    """Fetch and parse a cybersecurity RSS feed."""
+    """Fetch and safely parse a cybersecurity RSS feed."""
     try:
         validate_https_url(url)
 
@@ -283,7 +305,7 @@ def fetch_feed(source, url):
 
 
 def escape_slack_text(value):
-    """Escape special characters in Slack text."""
+    """Escape special characters in Slack message text."""
     return (
         value.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -292,7 +314,7 @@ def escape_slack_text(value):
 
 
 def build_digest(stories):
-    """Build a digest with SOC-relevant stories first."""
+    """Build a digest prioritizing SOC-relevant stories."""
     if not stories:
         return "No cybersecurity news stories were available today."
 
@@ -307,7 +329,10 @@ def build_digest(stories):
         key=lambda story: (
             is_soc_relevant(story),
             priority_scores[prioritize_story(story)],
-            story["published"],
+            story.get(
+                "published",
+                datetime.min.replace(tzinfo=timezone.utc),
+            ),
         ),
         reverse=True,
     )
@@ -321,20 +346,21 @@ def build_digest(stories):
     ]
 
     for index, story in enumerate(selected_stories, start=1):
-        priority_label = prioritize_story(story)
+        priority = prioritize_story(story)
         category = categorize_story(story)
-
         title = escape_slack_text(story["title"])
         source = escape_slack_text(story["source"])
         link = story["link"]
 
         lines.append(
             f"{index}. *<{link}|{title}>*\n"
-            f"   {priority_label} | {category} | {source}"
+            f"   {priority} | {category} | {source}"
         )
 
-        if story["summary"]:
-            summary = escape_slack_text(story["summary"])
+        summary = story.get("summary", "")
+
+        if summary:
+            summary = escape_slack_text(summary)
 
             if len(summary) > 250:
                 summary = summary[:247] + "..."
@@ -347,7 +373,7 @@ def build_digest(stories):
 
 
 def post_to_slack(message):
-    """Post the digest using credentials stored in GitHub Secrets."""
+    """Post the digest using GitHub Actions secrets."""
     token = os.environ.get("SLACK_BOT_TOKEN")
     channel = os.environ.get("SLACK_CHANNEL_ID")
 
