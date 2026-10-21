@@ -6,6 +6,7 @@ from news_bot import (
     is_soc_relevant,
     prioritize_story,
     needs_urgent_attention,
+    is_known_exploited,
 )
 
 
@@ -125,20 +126,14 @@ class TestNewsBot(unittest.TestCase):
             "title": "Ransomware attack reported",
             "summary": "",
         }
-        self.assertEqual(
-            prioritize_story(story),
-            "⚪ UNVERIFIED",
-        )
+        self.assertEqual(prioritize_story(story), "⚪ UNVERIFIED")
 
     def test_critical_priority(self):
         story = {
             "title": "Vulnerability CVSS score: 9.8",
             "summary": "",
         }
-        self.assertEqual(
-            prioritize_story(story),
-            "🚨 CRITICAL",
-        )
+        self.assertEqual(prioritize_story(story), "🚨 CRITICAL")
 
     def test_zero_cvss_score(self):
         story = {
@@ -160,6 +155,53 @@ class TestNewsBot(unittest.TestCase):
             "summary": "",
         }
         self.assertFalse(needs_urgent_attention(story))
+
+    # CISA KEV detection tests
+
+    def test_kev_match_in_title(self):
+        story = {
+            "title": "Critical flaw CVE-2025-12345 exploited",
+            "summary": "",
+        }
+        self.assertTrue(
+            is_known_exploited(
+                story,
+                {"CVE-2025-12345"},
+            )
+        )
+
+    def test_kev_match_in_summary_only_is_ignored(self):
+        story = {
+            "title": "Critical security flaw discovered",
+            "summary": "Related CVE-2025-12345 is exploited",
+        }
+        self.assertFalse(
+            is_known_exploited(
+                story,
+                {"CVE-2025-12345"},
+            )
+        )
+
+    def test_cve_not_in_kev_catalog(self):
+        story = {
+            "title": "Critical flaw CVE-2025-12345 discovered",
+            "summary": "",
+        }
+        self.assertFalse(
+            is_known_exploited(
+                story,
+                {"CVE-2025-99999"},
+            )
+        )
+
+    def test_empty_kev_catalog(self):
+        story = {
+            "title": "Critical flaw CVE-2025-12345 discovered",
+            "summary": "",
+        }
+        self.assertFalse(
+            is_known_exploited(story, set())
+        )
 
 
 if __name__ == "__main__":
