@@ -68,8 +68,8 @@ SECURITY.md
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Development Log](docs/DEVELOPMENT-LOG.md)
+- [Architecture](docs/PROJECT_ARCHITECTURE.md)
+- [Development Log](docs/DEVELOPMENT_LOG.md)
 - [Security Policy](SECURITY.md)
 
 ## Repository
